@@ -1,0 +1,33 @@
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#696969">
+
+    <Spinner
+        android:id="@+id/genre_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:spinnerMode="dropdown"/>
+
+    <EditText
+        android:id="@+id/year_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/ingresa_el_año"
+        android:textColor="@color/white"
+        android:textColorHint="#FAFAFA"
+        android:inputType="number"
+        android:maxLength="4"/>
+
+    <Button
+        android:id="@+id/search_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/buscar"
+        android:textColor="@color/black"
+        android:layout_marginTop="16dp"
+        style="@style/CustomMaterialButton"/>
+</LinearLayout>

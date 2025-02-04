@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">Olmedo_ÁlvaroIMDbAPP</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="nav_header_title">Android Studio</string>
+    <string name="nav_header_subtitle">android.studio@android.com</string>
+    <string name="nav_header_desc">Navigation header</string>
+    <string name="action_settings">Settings</string>
+    <string name="client_id">190387598425-v27d6avtkhr5kcd0bt6nnrr4frhs01de.apps.googleusercontent.com</string>
+    <string name="menu_home">Top 10</string>
+    <string name="menu_gallery">Favoritas</string>
+    <string name="menu_slideshow">Buscar Película</string>
+    <string name="movie_poster">Movie Poster</string>
+    <string name="log_out">Log Out</string>
+    <string name="buscar_pel_cula">Buscar Película</string>
+    <string name="favoritos">Favoritos</string>
+    <string name="ingresa_el_año">Ingresa el año</string>
+    <string name="buscar">Buscar</string>
+    <string name="nombre_usuario">Nombre usuario</string>
+    <string name="compartir">Compartir</string>
+    <string name="facebook_app_key">EAATEHQCercoBO4LBeZBZC98arpDi6pLZCtHfKwHW2waXbzk9T7QsZAiQ4D4jDDkKZBF1agT8oCtbT4JE6an7DONCZBWwWHzsZBvOPkSZBemoFIyAzuNWs3vm6dTL31ytY43RcdYfHeoK8Jw0oyIs3rzgF0ySQV4Csphf6wehzGdTl4ZB5cHw08xe0CEFKPTCCpU4x5rKiE3KDbGJ3MpXOBdwthD91cCBPsHV0ZApng7GhIDUtfIQEUn5TEZCfaNy5GK3QtA4RZBF1M8ZD</string>
+    <string name="facebook_app_id">1341528750337482</string>
+    <string name="fb_login_protocol_scheme">fb1341528750337482</string>
+    <string name="facebook_client_token">ccbbf6f25e83beb5c063ca258ea5786d</string>
+</resources>
