@@ -89,22 +89,28 @@ public class SearchResultsActivity extends AppCompatActivity {
     }
 
     private void handleLongClick(Movie movie) {
-        //Verifica que la película no sea nula
+        // Verifica que la película no sea nula
         if (movie == null) {
             Toast.makeText(this, "Película no disponible para insertar", Toast.LENGTH_SHORT).show();
             return;
         }
-        //Obtiene UID de Firebase
+
+        // Obtiene UID de Firebase
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         String uid = (currentUser != null) ? currentUser.getUid() : "usuario_sin_uid";
 
-        //Verifica si ya está en favoritos
+        // Verifica si ya está en favoritos
         if (favoriteDBHelper.isFavorite(uid, movie.getTconst())) {
-            //Si ya está en favoritos, mostrar un mensaje
+            // Si ya está en favoritos, mostrar un mensaje
             Toast.makeText(this, "La película ya está en favoritos", Toast.LENGTH_SHORT).show();
         } else {
-            //Inserta en la tabla 'favorites'
-            boolean isInserted = favoriteDBHelper.insertFavorite(uid, movie.getTconst(), movie.getImageUrl(), movie.getTitle());
+            // Inserta en la tabla 'favorites' con todos los detalles
+            boolean isInserted = favoriteDBHelper.insertFavoriteToCloud(
+                    uid,
+                    movie.getTconst(),
+                    movie.getImageUrl(),
+                    movie.getTitle());
+
             if (isInserted) {
                 Toast.makeText(this, "Añadido a favoritos: " + movie.getTitle(), Toast.LENGTH_SHORT).show();
             } else {

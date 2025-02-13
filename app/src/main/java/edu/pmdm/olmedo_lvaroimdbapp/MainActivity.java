@@ -3,6 +3,7 @@ package edu.pmdm.olmedo_lvaroimdbapp;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.Menu;
+import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -99,13 +100,11 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-            // Cierra sesión de Facebook si el usuario estaba autenticado con Facebook
             if (AccessToken.getCurrentAccessToken() != null) {
                 LoginManager.getInstance().logOut();
                 System.out.println("Sesión de Facebook cerrada exitosamente.");
             }
 
-            // Redirige a la pantalla de inicio de sesión
             Intent intent = new Intent(MainActivity.this, SignIn.class);
             startActivity(intent);
             finish();
@@ -128,4 +127,18 @@ public class MainActivity extends AppCompatActivity {
         NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
         return NavigationUI.navigateUp(navController, mAppBarConfiguration) || super.onSupportNavigateUp();
     }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Manejar clics en los ítems del menú
+        int id = item.getItemId();
+        if (id == R.id.action_editUser) {
+            // Iniciar la actividad EditUser
+            Intent intent = new Intent(this, EditUser.class);
+            startActivity(intent);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
 }

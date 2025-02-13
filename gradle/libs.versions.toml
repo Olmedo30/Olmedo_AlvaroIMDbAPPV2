@@ -13,6 +13,7 @@ navigationUi = "2.6.0"
 googleGmsGoogleServices = "4.4.2"
 firebaseAuth = "23.1.0"
 activity = "1.9.3"
+firebaseFirestore = "25.1.2"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -27,6 +28,7 @@ navigation-fragment = { group = "androidx.navigation", name = "navigation-fragme
 navigation-ui = { group = "androidx.navigation", name = "navigation-ui", version.ref = "navigationUi" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth", version.ref = "firebaseAuth" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
+firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore", version.ref = "firebaseFirestore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

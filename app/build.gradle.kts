@@ -38,6 +38,7 @@ android {
 dependencies {
 
     implementation ("com.github.bumptech.glide:glide:4.15.1")
+    implementation(libs.firebase.firestore)
     annotationProcessor ("com.github.bumptech.glide:compiler:4.15.1")
     implementation ("com.google.android.gms:play-services-auth:20.6.0")
     implementation ("com.squareup.retrofit2:retrofit:2.9.0")
@@ -45,6 +46,13 @@ dependencies {
     implementation ("com.google.code.gson:gson:2.8.9")
     implementation ("com.facebook.android:facebook-login:15.0.1")
     implementation ("com.facebook.android:facebook-android-sdk:12.3.0")
+    implementation ("com.googlecode.libphonenumber:libphonenumber:8.12.45")
+    implementation ("com.hbb20:ccp:2.5.3")
+    implementation ("com.google.android.gms:play-services-places:17.0.0")
+    implementation ("com.google.android.libraries.places:places:3.1.0")
+    implementation ("com.google.android.gms:play-services-maps:18.1.0")
+    implementation ("com.hbb20:ccp:2.5.1")
+    implementation ("com.googlecode.libphonenumber:libphonenumber:8.12.37")
 
     implementation(libs.appcompat)
     implementation(libs.material)

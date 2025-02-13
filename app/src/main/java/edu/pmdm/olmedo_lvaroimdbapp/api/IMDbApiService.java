@@ -10,7 +10,7 @@ public class IMDbApiService {
 
     private static final String HOST = "imdb-com.p.rapidapi.com";
 
-    public String getMovieOverview(String tconst) throws IOException {
+    public static String getMovieOverview(String tconst) throws IOException {
         String url = "https://" + HOST + "/title/get-overview?tconst=" + tconst;
         return makeRequest(url);
     }
@@ -20,7 +20,7 @@ public class IMDbApiService {
         return makeRequest(url);
     }
 
-    private String makeRequest(String urlString) throws IOException {
+    private static String makeRequest(String urlString) throws IOException {
         HttpURLConnection connection = null;
         BufferedReader reader = null;
         try {

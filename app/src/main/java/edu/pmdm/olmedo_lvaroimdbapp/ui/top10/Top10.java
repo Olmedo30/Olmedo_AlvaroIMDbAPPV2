@@ -1,4 +1,4 @@
-package edu.pmdm.olmedo_lvaroimdbapp.ui.home;
+package edu.pmdm.olmedo_lvaroimdbapp.ui.top10;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -8,34 +8,30 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.Toast;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-
 import edu.pmdm.olmedo_lvaroimdbapp.R;
 import edu.pmdm.olmedo_lvaroimdbapp.api.IMDbApiService;
 import edu.pmdm.olmedo_lvaroimdbapp.models.FavoriteDBHelper;
 import edu.pmdm.olmedo_lvaroimdbapp.models.Movie;
 import edu.pmdm.olmedo_lvaroimdbapp.models.MovieDetailsActivity;
+import edu.pmdm.olmedo_lvaroimdbapp.sync.FavoritesSync;
 
-public class HomeFragment extends Fragment {
-
+public class Top10 extends Fragment {
     private RecyclerView recyclerView;
     private List<Movie> movieList = new ArrayList<>();
+    private FavoritesSync favoritesSync; // Instancia de FavoritesSync
 
     @Nullable
     @Override
@@ -44,6 +40,14 @@ public class HomeFragment extends Fragment {
 
         recyclerView = root.findViewById(R.id.recycler_view);
         recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 2));
+
+        // Obtiene UID del usuario actual desde Firebase
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        String uid = (currentUser != null) ? currentUser.getUid() : "usuario_sin_uid";
+
+        // Inicializa FavoritesSync
+        favoritesSync = new FavoritesSync(requireContext(), uid);
+
         recyclerView.setAdapter(new RecyclerView.Adapter<MovieViewHolder>() {
             @NonNull
             @Override
@@ -55,46 +59,76 @@ public class HomeFragment extends Fragment {
             @Override
             public void onBindViewHolder(@NonNull MovieViewHolder holder, int position) {
                 Movie movie = movieList.get(position);
-                //Carga la imagen con Glide
+
+                // Carga la imagen con Glide
                 Glide.with(holder.imageView.getContext())
                         .load(movie.getImageUrl())
                         .into(holder.imageView);
-                //Maneja el click en el ítem
+
+                // Maneja el click en el ítem
                 holder.itemView.setOnClickListener(v -> {
                     Intent intent = new Intent(getContext(), MovieDetailsActivity.class);
                     intent.putExtra("MOVIE_ID", movie.getTconst());
                     intent.putExtra("IMAGE_URL", movie.getImageUrl());
                     startActivity(intent);
                 });
+
+                // Maneja el long click en el ítem
                 holder.itemView.setOnLongClickListener(v -> {
-                    //Verifica que la película no sea nula
                     if (movie == null) {
                         Toast.makeText(getContext(), "Película no disponible para insertar", Toast.LENGTH_SHORT).show();
                         return true;
                     }
-                    //Obtiene UID de Firebase
-                    FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
-                    String uid = (currentUser != null) ? currentUser.getUid() : "usuario_sin_uid";
 
-                    //Crea una instancia del DBHelper
                     FavoriteDBHelper dbHelper = new FavoriteDBHelper(getContext());
-
-                    //Verifica si ya está en favoritos
                     if (dbHelper.isFavorite(uid, movie.getTconst())) {
-                        //Si ya está en favoritos, mostrar un mensaje
                         Toast.makeText(getContext(), "La película ya está en favoritos", Toast.LENGTH_SHORT).show();
                         Log.d("GalleryFragment", "Película ya en favoritos");
-                    } else {
-                        //Inserta en la tabla 'favorites'
-                        boolean isInserted = dbHelper.insertFavorite(uid, movie.getTconst(), movie.getImageUrl(), movie.getTitle());
-                        if (isInserted) {
-                            Toast.makeText(getContext(), "Añadido a favoritos", Toast.LENGTH_SHORT).show();
-                            Log.d("GalleryFragment", "Insert exitoso");
-                        } else {
-                            Toast.makeText(getContext(), "Error al insertar en favoritos", Toast.LENGTH_SHORT).show();
-                            Log.e("GalleryFragment", "Fallo al insertar en la base de datos");
-                        }
+                        return true;
                     }
+
+                    // Inserta en la tabla 'favorites' local
+                    boolean isInserted = dbHelper.insertFavorite(uid, movie.getTconst(), movie.getImageUrl(), movie.getTitle());
+                    if (!isInserted) {
+                        Toast.makeText(getContext(), "Error al insertar en favoritos", Toast.LENGTH_SHORT).show();
+                        Log.e("GalleryFragment", "Fallo al insertar en la base de datos");
+                        return true;
+                    }
+
+                    // Obtener detalles adicionales de la película desde la API
+                    new Thread(() -> {
+                        try {
+                            String overviewResponse = IMDbApiService.getMovieOverview(movie.getTconst());
+                            JSONObject overviewJson = new JSONObject(overviewResponse);
+
+                            // Extraer los datos adicionales
+                            String releaseDate = overviewJson.optString("year", "");
+                            Double rating = Double.valueOf(overviewJson.optString("rating", ""));
+                            String overview = overviewJson.optString("plotSummary", "");
+
+                            // Actualizar la película con los datos adicionales
+                            movie.setReleaseDate(releaseDate);
+                            movie.setRating(rating);
+                            movie.setDescription(overview);
+
+                            // Agrega la película a la nube
+                            favoritesSync.addMovieToCloud(movie);
+                            requireActivity().runOnUiThread(() -> {
+                                Toast.makeText(getContext(), "Añadido a favoritos", Toast.LENGTH_SHORT).show();
+                                Log.d("GalleryFragment", "Insert exitoso");
+                            });
+
+                        } catch (Exception e) {
+                            Log.e("GalleryFragment", "Error al obtener detalles de la película", e);
+                            // Si falla la API, insertar con los datos disponibles
+                            favoritesSync.addMovieToCloud(movie);
+                            requireActivity().runOnUiThread(() -> {
+                                Toast.makeText(getContext(), "Añadido a favoritos (datos limitados)", Toast.LENGTH_SHORT).show();
+                                Log.d("GalleryFragment", "Insert exitoso con datos limitados");
+                            });
+                        }
+                    }).start();
+
                     return true;
                 });
             }
@@ -104,11 +138,12 @@ public class HomeFragment extends Fragment {
                 return movieList.size();
             }
         });
+
         fetchTopMeterMovies();
         return root;
     }
 
-    //Realiza la solicitud a la API para obtener el Top Meter y actualiza el RecyclerView.
+    // Realiza la solicitud a la API para obtener el Top Meter y actualiza el RecyclerView.
     private void fetchTopMeterMovies() {
         new Thread(() -> {
             IMDbApiService apiService = new IMDbApiService();
@@ -121,7 +156,7 @@ public class HomeFragment extends Fragment {
         }).start();
     }
 
-    //Parsea la respuesta de la API y actualizar la lista de películas.
+    // Parsea la respuesta de la API y actualiza la lista de películas.
     private void parseAndPopulateMovies(String jsonResponse) {
         try {
             JSONObject jsonObject = new JSONObject(jsonResponse);
@@ -131,21 +166,22 @@ public class HomeFragment extends Fragment {
                 if (edges != null) {
                     for (int i = 0; i < Math.min(edges.length(), 10); i++) { // Limitar al Top 10
                         JSONObject node = edges.getJSONObject(i).optJSONObject("node");
-                        //Extrae el ID de la película
+                        // Extrae el ID de la película
                         String movieId = node.optString("id", "");
                         if (!movieId.startsWith("tt")) {
                             Log.e("HomeFragment", "ID no válido: " + movieId);
                             continue;
                         }
-                        //Extrae la URL de la imagen
+                        // Extrae la URL de la imagen
                         String imageUrl = node.optJSONObject("primaryImage").optString("url", "");
                         if (imageUrl.isEmpty()) {
                             Log.e("HomeFragment", "URL de imagen no disponible para ID: " + movieId);
                             continue;
                         }
-                        //Extrae el título de la película
+                        // Extrae el título de la película
                         String title = node.optJSONObject("titleText").optString("text", "Sin título");
-                        //Crea objeto Movie y añade a la lista
+
+                        // Crea objeto Movie y añade a la lista
                         Movie movie = new Movie();
                         movie.setTconst(movieId);
                         movie.setImageUrl(imageUrl);

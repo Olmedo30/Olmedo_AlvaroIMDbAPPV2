@@ -1,4 +1,4 @@
-package edu.pmdm.olmedo_lvaroimdbapp.ui.slideshow;
+package edu.pmdm.olmedo_lvaroimdbapp.ui.searchMovie;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -26,7 +26,7 @@ import edu.pmdm.olmedo_lvaroimdbapp.api.TMDbApiService;
 import edu.pmdm.olmedo_lvaroimdbapp.models.Movie;
 import edu.pmdm.olmedo_lvaroimdbapp.ui.SearchResultsActivity;
 
-public class SlideshowFragment extends Fragment {
+public class SearchMovie extends Fragment {
 
     private Spinner genreSpinner;
     private EditText yearInput;

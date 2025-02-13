@@ -5,15 +5,28 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
+
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+/**
+ * Clase para manejar la base de datos "favorites.db" que incluye
+ * la tabla "favorites" y la tabla "user_sessions".
+ */
 public class FavoriteDBHelper extends SQLiteOpenHelper {
 
-    // Nombre y versión de la base de datos (se incrementa la versión al agregar la nueva tabla)
+    private static final String TAG = "FavoriteDBHelper";
+    private static FavoriteDBHelper instance;
+    private final FirebaseFirestore firestore;
+    // Nombre y versión de la base de datos
     private static final String DATABASE_NAME = "favorites.db";
-    private static final int DATABASE_VERSION = 2; // Versión incrementada
+    private static final int DATABASE_VERSION = 4; // Ajustar si necesitas cambios de esquema
 
     // Tabla "favorites"
     private static final String TABLE_FAVORITES = "favorites";
@@ -32,12 +45,16 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
                     COLUMN_IMAGE_URL + " TEXT NOT NULL, " +
                     COLUMN_TITLE + " TEXT NOT NULL);";
 
+    // Tabla "user_sessions"
     private static final String TABLE_USER_SESSIONS = "user_sessions";
     private static final String COLUMN_SESSION_USER_ID = "user_id";
     private static final String COLUMN_NOMBRE = "nombre";
     private static final String COLUMN_EMAIL = "email";
     private static final String COLUMN_LOGIN_TIME = "login_time";
     private static final String COLUMN_LOGOUT_TIME = "logout_time";
+    private static final String COLUMN_ADDRESS = "address";
+    private static final String COLUMN_PHONE = "phone";
+    private static final String COLUMN_IMAGE = "image";
 
     // Consulta para crear la tabla "user_sessions"
     private static final String CREATE_TABLE_USER_SESSIONS =
@@ -46,31 +63,133 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
                     COLUMN_NOMBRE + " TEXT NOT NULL, " +
                     COLUMN_EMAIL + " TEXT NOT NULL, " +
                     COLUMN_LOGIN_TIME + " TEXT, " +
-                    COLUMN_LOGOUT_TIME + " TEXT" +
+                    COLUMN_LOGOUT_TIME + " TEXT, " +
+                    COLUMN_ADDRESS + " TEXT, " +
+                    COLUMN_PHONE + " TEXT, " +
+                    COLUMN_IMAGE + " TEXT" +
                     ");";
+
+    public static synchronized FavoriteDBHelper getInstance(Context context) {
+        if (instance == null) {
+            instance = new FavoriteDBHelper(context.getApplicationContext());
+        }
+        return instance;
+    }
 
     public FavoriteDBHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        firestore = null;
     }
 
-    // Se crea la base de datos con ambas tablas
     @Override
     public void onCreate(SQLiteDatabase db) {
+        Log.d(TAG, "Creando tablas en la base de datos...");
         db.execSQL(CREATE_TABLE_FAVORITES);
         db.execSQL(CREATE_TABLE_USER_SESSIONS);
     }
 
-    // Se actualiza la base de datos (en este ejemplo se eliminan las tablas y se vuelven a crear)
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Nota: En producción se recomienda migrar datos en lugar de borrarlos.
+        Log.d(TAG, "Actualizando base de datos de la versión " + oldVersion + " a " + newVersion);
+
+        // Eliminar las tablas existentes
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_FAVORITES);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USER_SESSIONS);
+
+        // Crear las tablas de nuevo
         onCreate(db);
     }
 
-    // Métodos para la tabla "favorites"
+    /**
+     * Inserta o actualiza los datos de un usuario en la tabla user_sessions (upsert).
+     */
+    public boolean upsertUserSession(String userId,
+                                     String nombre,
+                                     String email,
+                                     String loginTime,
+                                     String address,
+                                     String phone,
+                                     String image) {
+
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_SESSION_USER_ID, userId);
+        values.put(COLUMN_NOMBRE, nombre);
+        values.put(COLUMN_EMAIL, email);
+        values.put(COLUMN_LOGIN_TIME, loginTime);
+        // logout_time no lo estamos pasando, lo podrías actualizar si lo necesitas
+        values.put(COLUMN_ADDRESS, address);
+        values.put(COLUMN_PHONE, phone);
+        values.put(COLUMN_IMAGE, image);
+
+        // insertWithOnConflict con CONFLICT_IGNORE
+        long result = db.insertWithOnConflict(
+                TABLE_USER_SESSIONS,
+                null,
+                values,
+                SQLiteDatabase.CONFLICT_IGNORE
+        );
+        if (result == -1) {
+            // No se insertó => ya existe userId => hacemos update
+            int rows = db.update(
+                    TABLE_USER_SESSIONS,
+                    values,
+                    COLUMN_SESSION_USER_ID + "=?",
+                    new String[]{userId}
+            );
+            return rows > 0;
+        }
+        return true;
+    }
+
+    /**
+     * Obtiene un registro de user_sessions a partir de userId.
+     */
+    public UserSession getUserSession(String userId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        // WHERE user_id = ?
+        Cursor cursor = db.query(
+                TABLE_USER_SESSIONS,
+                null,
+                COLUMN_SESSION_USER_ID + "=?",
+                new String[]{userId},
+                null,
+                null,
+                null
+        );
+
+        if (cursor != null && cursor.moveToFirst()) {
+            String nombre     = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_NOMBRE));
+            String email      = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_EMAIL));
+            String loginTime  = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LOGIN_TIME));
+            String logoutTime = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LOGOUT_TIME));
+            String address    = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ADDRESS));
+            String phone      = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PHONE));
+            String image      = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_IMAGE));
+
+            cursor.close();
+
+            return new UserSession(
+                    userId,
+                    nombre,
+                    email,
+                    loginTime,
+                    logoutTime,
+                    address,
+                    phone,
+                    image
+            );
+        }
+
+        if (cursor != null) {
+            cursor.close();
+        }
+        return null; // Si no encontró nada
+    }
+
     public boolean insertFavorite(String userId, String movieId, String imageUrl, String title) {
+        // Verifica si ya es favorito
         if (isFavorite(userId, movieId)) {
             return false;
         }
@@ -80,24 +199,42 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         values.put(COLUMN_MOVIE_ID, movieId);
         values.put(COLUMN_IMAGE_URL, imageUrl);
         values.put(COLUMN_TITLE, title);
-
         long result = db.insert(TABLE_FAVORITES, null, values);
         return result != -1;
+    }
+
+    public boolean insertFavoriteToCloud(String userId, String movieId, String imageUrl, String title) {
+        // Referencia al documento de la película en Firestore
+        DocumentReference movieRef = firestore.collection("favorites") // Colección principal
+                .document(userId) // Documento del usuario
+                .collection("movies") // Subcolección de películas favoritas
+                .document(movieId); // Documento de la película
+
+        // Crear un mapa para almacenar los datos de la película
+        Map<String, Object> movieData = new HashMap<>();
+        movieData.put("movie_id", movieId);
+        movieData.put("poster", imageUrl);
+        movieData.put("title", title);
+
+        // Insertar los datos en Firestore
+        movieRef.set(movieData)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "Película añadida a la nube: " + movieId))
+                .addOnFailureListener(e -> Log.e(TAG, "Error al añadir la película a la nube: " + movieId, e));
+
+        // Retorna true si la operación fue exitosa, false si falló
+        return true; // Nota: Firestore no devuelve directamente un resultado como SQLite, por lo que siempre retornamos true aquí.
     }
 
     public List<Movie> getAllMovies(String userId) {
         List<Movie> movies = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
-
         String query = "SELECT * FROM " + TABLE_FAVORITES + " WHERE " + COLUMN_USER_ID + " = ?";
         Cursor cursor = db.rawQuery(query, new String[]{userId});
-
         if (cursor.moveToFirst()) {
             do {
                 String movieId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_MOVIE_ID));
                 String imageUrl = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_IMAGE_URL));
                 String title = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TITLE));
-
                 Movie movie = new Movie(movieId, title, imageUrl);
                 movies.add(movie);
             } while (cursor.moveToNext());
@@ -108,60 +245,60 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
 
     public boolean deleteFavorite(String userId, String movieId) {
         SQLiteDatabase db = this.getWritableDatabase();
-        int result = db.delete(TABLE_FAVORITES, COLUMN_USER_ID + "=? AND " + COLUMN_MOVIE_ID + "=?",
-                new String[]{userId, movieId});
+        int result = db.delete(
+                TABLE_FAVORITES,
+                COLUMN_USER_ID + "=? AND " + COLUMN_MOVIE_ID + "=?",
+                new String[]{userId, movieId}
+        );
         return result > 0;
     }
 
     public boolean isFavorite(String userId, String movieId) {
         SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.query(TABLE_FAVORITES, null,
+        Cursor cursor = db.query(
+                TABLE_FAVORITES,
+                null,
                 COLUMN_USER_ID + "=? AND " + COLUMN_MOVIE_ID + "=?",
-                new String[]{userId, movieId}, null, null, null);
-        boolean exists = cursor.getCount() > 0;
+                new String[]{userId, movieId},
+                null,
+                null,
+                null
+        );
+        boolean exists = (cursor.getCount() > 0);
         cursor.close();
         return exists;
     }
 
-    public boolean upsertUserSession(String userId, String nombre, String email, String loginTime) {
+    public boolean updateUserSession(String userId,
+                                     String nombre,
+                                     String email,
+                                     String loginTime,
+                                     String address,
+                                     String phone,
+                                     String image) {
+
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-        values.put(COLUMN_SESSION_USER_ID, userId);
         values.put(COLUMN_NOMBRE, nombre);
         values.put(COLUMN_EMAIL, email);
         values.put(COLUMN_LOGIN_TIME, loginTime);
+        values.put(COLUMN_ADDRESS, address);
+        values.put(COLUMN_PHONE, phone);
+        values.put(COLUMN_IMAGE, image);
 
-        long result = db.insertWithOnConflict(TABLE_USER_SESSIONS, null, values, SQLiteDatabase.CONFLICT_IGNORE);
-        if (result == -1) {
-            int rows = db.update(TABLE_USER_SESSIONS, values, COLUMN_SESSION_USER_ID + "=?", new String[]{userId});
-            return rows > 0;
-        }
-        return true;
+        // Actualiza la fila que coincida con el user_id
+        int rowsAffected = db.update(TABLE_USER_SESSIONS,
+                values,
+                COLUMN_SESSION_USER_ID + "=?",
+                new String[]{userId});
+
+        return (rowsAffected > 0);  // true si se actualizó al menos 1 fila
     }
 
-    public boolean updateLogoutTime(String userId, String logoutTime) {
+    public void deleteAllFavorites(String userId) {
         SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_LOGOUT_TIME, logoutTime);
-
-        int rows = db.update(TABLE_USER_SESSIONS, values, COLUMN_SESSION_USER_ID + "=?", new String[]{userId});
-        return rows > 0;
-    }
-
-    public UserSession getUserSession(String userId) {
-        SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.query(TABLE_USER_SESSIONS, null,
-                COLUMN_SESSION_USER_ID + "=?", new String[]{userId},
-                null, null, null);
-        UserSession session = null;
-        if (cursor.moveToFirst()) {
-            String nombre = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_NOMBRE));
-            String email = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_EMAIL));
-            String loginTime = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LOGIN_TIME));
-            String logoutTime = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LOGOUT_TIME));
-            session = new UserSession(userId, nombre, email, loginTime, logoutTime);
-        }
-        cursor.close();
-        return session;
+        int deletedRows = db.delete("favorites", "user_id=?", new String[]{userId});
+        db.close();
+        Log.d("FavoriteDBHelper", "Se eliminaron " + deletedRows + " favoritos del usuario: " + userId);
     }
 }

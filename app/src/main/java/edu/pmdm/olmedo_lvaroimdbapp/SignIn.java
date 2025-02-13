@@ -14,6 +14,7 @@ import com.facebook.AccessToken;
 import com.facebook.CallbackManager;
 import com.facebook.FacebookCallback;
 import com.facebook.FacebookException;
+import com.facebook.login.LoginManager;
 import com.facebook.login.LoginResult;
 import com.facebook.login.widget.LoginButton;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
@@ -40,7 +41,6 @@ import edu.pmdm.olmedo_lvaroimdbapp.models.FavoriteDBHelper;
 
 public class SignIn extends AppCompatActivity {
     private static final String TAG = "SignIn";
-
     private GoogleSignInClient mGoogleSignInClient;
     private ActivityResultLauncher<Intent> signInLauncher;
     private CallbackManager callbackManager;
@@ -58,7 +58,7 @@ public class SignIn extends AppCompatActivity {
         }
 
         mAuth = FirebaseAuth.getInstance();
-        //Log.d(TAG, "Firebase Auth initialized: " + (mAuth != null ? "OK" : "Failed"));
+        Log.d(TAG, "Firebase Auth initialized: " + (mAuth != null ? "OK" : "Failed"));
 
         SignInButton signInButton = findViewById(R.id.share_button);
         if (signInButton == null) {
@@ -66,16 +66,16 @@ public class SignIn extends AppCompatActivity {
         } else {
             TextView textView = (TextView) signInButton.getChildAt(0);
             textView.setText("Sign in with Google");
-            //Log.d(TAG, "Google sign-in button configurado");
+            Log.d(TAG, "Google sign-in button configurado");
 
             GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                     .requestIdToken(getString(R.string.client_id))
                     .requestEmail()
                     .build();
-            //Log.d(TAG, "GoogleSignInOptions creado con el id de cliente: " + getString(R.string.client_id));
+            Log.d(TAG, "GoogleSignInOptions creado con el id de cliente: " + getString(R.string.client_id));
 
             mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
-            //Log.d(TAG, "GoogleSignInClient creado: " + (mGoogleSignInClient != null ? "OK" : "Error"));
+            Log.d(TAG, "GoogleSignInClient creado: " + (mGoogleSignInClient != null ? "OK" : "Error"));
 
             signInLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == RESULT_OK) {
@@ -149,8 +149,8 @@ public class SignIn extends AppCompatActivity {
 
     private void signInWithGoogle() {
         Intent signInIntent = mGoogleSignInClient.getSignInIntent();
-        //Log.d(TAG, "Launching Google Sign In Intent: " + (signInIntent != null ? "Intent created" : "Failed to create intent"));
-        //Log.d(TAG, "Sign-in intent details: " + (signInIntent != null ? signInIntent.toString() : "Null intent"));
+        Log.d(TAG, "Launching Google Sign In Intent: " + (signInIntent != null ? "Intent created" : "Failed to create intent"));
+        Log.d(TAG, "Sign-in intent details: " + (signInIntent != null ? signInIntent.toString() : "Null intent"));
         if (signInIntent != null) {
             signInLauncher.launch(signInIntent);
         } else {
@@ -170,17 +170,17 @@ public class SignIn extends AppCompatActivity {
                     .addOnCompleteListener(this, task -> {
                         if (task.isSuccessful()) {
                             if (pendingFacebookCredential != null) {
-                                //Log.d(TAG, "Existe una credencial de Facebook pendiente. Se intenta vincular.");
+                                Log.d(TAG, "Existe una credencial de Facebook pendiente. Se intenta vincular.");
                                 FirebaseUser user = mAuth.getCurrentUser();
                                 if (user != null) {
                                     user.linkWithCredential(pendingFacebookCredential)
                                             .addOnCompleteListener(linkTask -> {
                                                 if (linkTask.isSuccessful()) {
-                                                    //Log.d(TAG, "Cuenta de Facebook vinculada exitosamente.");
+                                                    Log.d(TAG, "Cuenta de Facebook vinculada exitosamente.");
                                                     pendingFacebookCredential = null;
                                                     navigateToMainActivity();
                                                 } else {
-                                                    //Log.e(TAG, "Error al vincular la cuenta de Facebook", linkTask.getException());
+                                                    Log.e(TAG, "Error al vincular la cuenta de Facebook", linkTask.getException());
                                                     Toast.makeText(SignIn.this, "Error al vincular la cuenta de Facebook: " + linkTask.getException().getMessage(), Toast.LENGTH_SHORT).show();
                                                 }
                                             });
@@ -218,6 +218,7 @@ public class SignIn extends AppCompatActivity {
                         if (exception instanceof FirebaseAuthUserCollisionException) {
                             Log.e(TAG, "Error de colisión de cuentas. La cuenta ya existe con otro proveedor.", exception);
                             Toast.makeText(SignIn.this, "La cuenta ya existe con otro proveedor. Inicia sesión con Google para vincular la cuenta.", Toast.LENGTH_LONG).show();
+                            LoginManager.getInstance().logOut();
                             pendingFacebookCredential = credential;
                         } else {
                             Log.e(TAG, "Error en autenticación con Firebase", exception);
@@ -229,7 +230,6 @@ public class SignIn extends AppCompatActivity {
 
     private void navigateToMainActivity() {
         Log.d(TAG, "Navigating to MainActivity");
-
         FirebaseUser user = mAuth.getCurrentUser();
         if (user != null) {
             String uid = user.getUid();
@@ -238,8 +238,14 @@ public class SignIn extends AppCompatActivity {
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
             sdf.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
             String loginTime = sdf.format(new Date());
+
+            String address = null;
+            String phone = null;
+            String image = null;
+
             FavoriteDBHelper dbHelper = new FavoriteDBHelper(this);
-            boolean result = dbHelper.upsertUserSession(uid, name, email, loginTime);
+            boolean result = dbHelper.upsertUserSession(uid, name, email, loginTime, address, phone, image);
+
             if (result) {
                 Log.d(TAG, "User session saved successfully in DB.");
             } else {
@@ -250,6 +256,7 @@ public class SignIn extends AppCompatActivity {
         startActivity(intent);
         finish();
     }
+
 
     @Override
     protected void onStart() {

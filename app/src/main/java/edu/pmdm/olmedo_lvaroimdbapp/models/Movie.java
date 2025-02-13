@@ -41,6 +41,15 @@ public class Movie implements Parcelable {
         this.imageUrl = imageUrl;
     }
 
+    public Movie(String tconst, String title, String description, String releaseDate, double rating, String imageUrl) {
+        this.tconst = tconst;
+        this.title = title;
+        this.description = description;
+        this.releaseDate = releaseDate;
+        this.rating = rating;
+        this.imageUrl = imageUrl;
+    }
+
     protected Movie(Parcel in) {
         tconst = in.readString();
         title = in.readString();
