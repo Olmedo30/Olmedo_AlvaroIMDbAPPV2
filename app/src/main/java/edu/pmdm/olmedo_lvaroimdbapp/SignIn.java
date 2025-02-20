@@ -3,6 +3,8 @@ package edu.pmdm.olmedo_lvaroimdbapp;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,6 +28,8 @@ import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.SignInButton;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException;
+import com.google.firebase.auth.FirebaseAuthInvalidUserException;
 import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.FacebookAuthProvider;
@@ -46,12 +50,22 @@ public class SignIn extends AppCompatActivity {
     private CallbackManager callbackManager;
     private FirebaseAuth mAuth;
     private AuthCredential pendingFacebookCredential = null;
+    private EditText editTextEmail, editTextPassword;
+    private Button buttonLogin, buttonRegister;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sign_in);
         getSupportActionBar().setTitle("Sign in IMDb");
+
+        editTextEmail = findViewById(R.id.editTextNombre);
+        editTextPassword = findViewById(R.id.editTextTextPassword);
+        buttonLogin = findViewById(R.id.buttonLogin);
+        buttonRegister = findViewById(R.id.buttonRegister);
+
+        buttonLogin.setOnClickListener(v -> loginWithEmail());
+        buttonRegister.setOnClickListener(v -> registerWithEmail());
 
         if (!checkGooglePlayServices()) {
             return;
@@ -223,6 +237,56 @@ public class SignIn extends AppCompatActivity {
                         } else {
                             Log.e(TAG, "Error en autenticación con Firebase", exception);
                             Toast.makeText(SignIn.this, "Error en autenticación con Firebase: " + exception.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+    }
+
+    private void registerWithEmail() {
+        String email = editTextEmail.getText().toString().trim();
+        String password = editTextPassword.getText().toString().trim();
+
+        if (email.isEmpty() || password.isEmpty()) {
+            Toast.makeText(this, "Por favor, completa todos los campos", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        mAuth.createUserWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        Toast.makeText(SignIn.this, "Registro exitoso", Toast.LENGTH_SHORT).show();
+                        navigateToMainActivity();
+                    } else {
+                        if (task.getException() instanceof FirebaseAuthUserCollisionException) {
+                            Toast.makeText(SignIn.this, "Este correo ya está registrado", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(SignIn.this, "Error:" +task.getException().getMessage(), Toast.LENGTH_SHORT).show();
+                            Log.e(TAG, "Error: " + task.getException().getMessage());
+                        }
+                    }
+                });
+    }
+
+    private void loginWithEmail() {
+        String email = editTextEmail.getText().toString().trim();
+        String password = editTextPassword.getText().toString().trim();
+
+        if (email.isEmpty() || password.isEmpty()) {
+            Toast.makeText(this, "Por favor, completa todos los campos", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        mAuth.signInWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        navigateToMainActivity();
+                    } else {
+                        if (task.getException() instanceof FirebaseAuthInvalidUserException) {
+                            Toast.makeText(SignIn.this, "Este correo no está registrado. Por favor, regístrate antes de iniciar sesión.", Toast.LENGTH_LONG).show();
+                        } else if (task.getException() instanceof FirebaseAuthInvalidCredentialsException) {
+                            Toast.makeText(SignIn.this, "Correo o contraseña incorrectos", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(SignIn.this, "Error: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
                         }
                     }
                 });

@@ -104,17 +104,30 @@ public class SearchResultsActivity extends AppCompatActivity {
             // Si ya está en favoritos, mostrar un mensaje
             Toast.makeText(this, "La película ya está en favoritos", Toast.LENGTH_SHORT).show();
         } else {
-            // Inserta en la tabla 'favorites' con todos los detalles
-            boolean isInserted = favoriteDBHelper.insertFavoriteToCloud(
+            // Inserta en la tabla 'favorites' local
+            boolean isInsertedLocal = favoriteDBHelper.insertFavorite(
                     uid,
                     movie.getTconst(),
                     movie.getImageUrl(),
-                    movie.getTitle());
+                    movie.getTitle()
+            );
 
-            if (isInserted) {
-                Toast.makeText(this, "Añadido a favoritos: " + movie.getTitle(), Toast.LENGTH_SHORT).show();
+            if (isInsertedLocal) {
+                // Inserta en la nube
+                boolean isInsertedCloud = favoriteDBHelper.insertFavoriteToCloud(
+                        uid,
+                        movie.getTconst(),
+                        movie.getImageUrl(),
+                        movie.getTitle()
+                );
+
+                if (isInsertedCloud) {
+                    Toast.makeText(this, "Añadido a favoritos: " + movie.getTitle(), Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Error al añadir a favoritos en la nube", Toast.LENGTH_SHORT).show();
+                }
             } else {
-                Toast.makeText(this, "Error al añadir a favoritos", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Error al añadir a favoritos localmente", Toast.LENGTH_SHORT).show();
             }
         }
     }

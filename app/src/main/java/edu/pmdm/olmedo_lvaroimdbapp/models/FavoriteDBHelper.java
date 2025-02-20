@@ -78,7 +78,7 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
 
     public FavoriteDBHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
-        firestore = null;
+        firestore = FirebaseFirestore.getInstance();
     }
 
     @Override
@@ -100,9 +100,6 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    /**
-     * Inserta o actualiza los datos de un usuario en la tabla user_sessions (upsert).
-     */
     public boolean upsertUserSession(String userId,
                                      String nombre,
                                      String email,
@@ -142,13 +139,9 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         return true;
     }
 
-    /**
-     * Obtiene un registro de user_sessions a partir de userId.
-     */
     public UserSession getUserSession(String userId) {
         SQLiteDatabase db = this.getReadableDatabase();
 
-        // WHERE user_id = ?
         Cursor cursor = db.query(
                 TABLE_USER_SESSIONS,
                 null,
@@ -167,9 +160,7 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
             String address    = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ADDRESS));
             String phone      = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PHONE));
             String image      = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_IMAGE));
-
             cursor.close();
-
             return new UserSession(
                     userId,
                     nombre,
@@ -204,25 +195,26 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
     }
 
     public boolean insertFavoriteToCloud(String userId, String movieId, String imageUrl, String title) {
-        // Referencia al documento de la película en Firestore
-        DocumentReference movieRef = firestore.collection("favorites") // Colección principal
-                .document(userId) // Documento del usuario
-                .collection("movies") // Subcolección de películas favoritas
-                .document(movieId); // Documento de la película
+        if (firestore == null) {
+            Log.e(TAG, "Firestore no está inicializado");
+            return false;
+        }
 
-        // Crear un mapa para almacenar los datos de la película
+        DocumentReference movieRef = firestore.collection("favorites")
+                .document(userId)
+                .collection("movies")
+                .document(movieId);
+
         Map<String, Object> movieData = new HashMap<>();
         movieData.put("movie_id", movieId);
         movieData.put("poster", imageUrl);
         movieData.put("title", title);
 
-        // Insertar los datos en Firestore
         movieRef.set(movieData)
                 .addOnSuccessListener(aVoid -> Log.d(TAG, "Película añadida a la nube: " + movieId))
                 .addOnFailureListener(e -> Log.e(TAG, "Error al añadir la película a la nube: " + movieId, e));
 
-        // Retorna true si la operación fue exitosa, false si falló
-        return true; // Nota: Firestore no devuelve directamente un resultado como SQLite, por lo que siempre retornamos true aquí.
+        return true; // Retorna true si la operación fue exitosa
     }
 
     public List<Movie> getAllMovies(String userId) {
