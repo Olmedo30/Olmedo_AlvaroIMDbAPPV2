@@ -34,14 +34,21 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.FacebookAuthProvider;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.SetOptions;
 
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.TimeZone;
 
 import edu.pmdm.olmedo_lvaroimdbapp.models.FavoriteDBHelper;
+import edu.pmdm.olmedo_lvaroimdbapp.sync.UserSync;
 
 public class SignIn extends AppCompatActivity {
     private static final String TAG = "SignIn";
@@ -183,23 +190,42 @@ public class SignIn extends AppCompatActivity {
             mAuth.signInWithCredential(credential)
                     .addOnCompleteListener(this, task -> {
                         if (task.isSuccessful()) {
-                            if (pendingFacebookCredential != null) {
-                                Log.d(TAG, "Existe una credencial de Facebook pendiente. Se intenta vincular.");
-                                FirebaseUser user = mAuth.getCurrentUser();
-                                if (user != null) {
-                                    user.linkWithCredential(pendingFacebookCredential)
-                                            .addOnCompleteListener(linkTask -> {
-                                                if (linkTask.isSuccessful()) {
-                                                    Log.d(TAG, "Cuenta de Facebook vinculada exitosamente.");
-                                                    pendingFacebookCredential = null;
-                                                    navigateToMainActivity();
-                                                } else {
-                                                    Log.e(TAG, "Error al vincular la cuenta de Facebook", linkTask.getException());
-                                                    Toast.makeText(SignIn.this, "Error al vincular la cuenta de Facebook: " + linkTask.getException().getMessage(), Toast.LENGTH_SHORT).show();
-                                                }
-                                            });
-                                }
-                            } else {
+                            FirebaseUser user = mAuth.getCurrentUser();
+                            if (user != null) {
+                                String userId = user.getUid();
+                                String name = user.getDisplayName() != null ? user.getDisplayName() : "";
+                                String email = user.getEmail() != null ? user.getEmail() : "";
+                                String image = user.getPhotoUrl() != null ? user.getPhotoUrl().toString() : "";
+
+                                // Guardar datos en SQLite
+                                FavoriteDBHelper dbHelper = new FavoriteDBHelper(this);
+                                dbHelper.upsertUserSession(
+                                        userId,
+                                        name,
+                                        email,
+                                        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()),
+                                        null,
+                                        null,
+                                        image
+                                );
+
+                                // Guardar datos en Firestore
+                                FirebaseFirestore firestore = FirebaseFirestore.getInstance();
+                                DocumentReference userDocRef = firestore.collection("users").document(userId);
+
+                                Map<String, Object> userData = new HashMap<>();
+                                userData.put("nombre", name);
+                                userData.put("email", email);
+                                userData.put("image", image);
+
+                                userDocRef.set(userData, SetOptions.merge())
+                                        .addOnSuccessListener(aVoid -> {
+                                            Log.d(TAG, "Datos guardados en Firestore.");
+                                        })
+                                        .addOnFailureListener(e -> {
+                                            Log.e(TAG, "Error al guardar datos en Firestore.", e);
+                                        });
+
                                 navigateToMainActivity();
                             }
                         } else {
@@ -225,15 +251,50 @@ public class SignIn extends AppCompatActivity {
         mAuth.signInWithCredential(credential)
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
-                        Log.d(TAG, "Facebook Sign In Success");
-                        navigateToMainActivity();
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null) {
+                            String userId = user.getUid();
+                            String name = user.getDisplayName() != null ? user.getDisplayName() : "";
+                            String email = user.getEmail() != null ? user.getEmail() : "";
+                            String facebookImageUrl = "https://graph.facebook.com/" + userId + "/picture?type=large";
+
+                            // Guardar datos en SQLite
+                            FavoriteDBHelper dbHelper = new FavoriteDBHelper(this);
+                            dbHelper.upsertUserSession(
+                                    userId,
+                                    name,
+                                    email,
+                                    new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()),
+                                    null,
+                                    null,
+                                    facebookImageUrl
+                            );
+
+                            // Guardar datos en Firestore
+                            FirebaseFirestore firestore = FirebaseFirestore.getInstance();
+                            DocumentReference userDocRef = firestore.collection("users").document(userId);
+
+                            Map<String, Object> userData = new HashMap<>();
+                            userData.put("nombre", name);
+                            userData.put("email", email);
+                            userData.put("image", facebookImageUrl);
+
+                            userDocRef.set(userData, SetOptions.merge())
+                                    .addOnSuccessListener(aVoid -> {
+                                        Log.d(TAG, "Datos guardados en Firestore.");
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        Log.e(TAG, "Error al guardar datos en Firestore.", e);
+                                    });
+
+                            navigateToMainActivity();
+                        }
                     } else {
                         Exception exception = task.getException();
                         if (exception instanceof FirebaseAuthUserCollisionException) {
                             Log.e(TAG, "Error de colisión de cuentas. La cuenta ya existe con otro proveedor.", exception);
                             Toast.makeText(SignIn.this, "La cuenta ya existe con otro proveedor. Inicia sesión con Google para vincular la cuenta.", Toast.LENGTH_LONG).show();
                             LoginManager.getInstance().logOut();
-                            pendingFacebookCredential = credential;
                         } else {
                             Log.e(TAG, "Error en autenticación con Firebase", exception);
                             Toast.makeText(SignIn.this, "Error en autenticación con Firebase: " + exception.getMessage(), Toast.LENGTH_SHORT).show();
@@ -255,16 +316,43 @@ public class SignIn extends AppCompatActivity {
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
                         Toast.makeText(SignIn.this, "Registro exitoso", Toast.LENGTH_SHORT).show();
+
+                        // Obtener el UID del nuevo usuario
+                        FirebaseUser user = mAuth.getCurrentUser();
+                        if (user != null) {
+                            String uid = user.getUid();
+
+                            // Guardar el tiempo de inicio de sesión en SQLite
+                            FavoriteDBHelper dbHelper = FavoriteDBHelper.getInstance(this);
+                            boolean result = dbHelper.upsertUserSession(uid, "", email, getCurrentTime(), "", "", "");
+
+                            if (result) {
+                                Log.d(TAG, "User session saved successfully in SQLite.");
+                            } else {
+                                Log.e(TAG, "Failed to save user session in SQLite.");
+                            }
+
+                            // Sincronizar con Firestore usando UserSync
+                            new UserSync(this, uid).syncFromLocalToCloud();
+                        }
+
                         navigateToMainActivity();
                     } else {
                         if (task.getException() instanceof FirebaseAuthUserCollisionException) {
                             Toast.makeText(SignIn.this, "Este correo ya está registrado", Toast.LENGTH_SHORT).show();
                         } else {
-                            Toast.makeText(SignIn.this, "Error:" +task.getException().getMessage(), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(SignIn.this, "Error: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
                             Log.e(TAG, "Error: " + task.getException().getMessage());
                         }
                     }
                 });
+    }
+
+    // Método auxiliar para obtener la hora actual
+    private String getCurrentTime() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        sdf.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
+        return sdf.format(new Date());
     }
 
     private void loginWithEmail() {
@@ -299,6 +387,7 @@ public class SignIn extends AppCompatActivity {
             String uid = user.getUid();
             String name = (user.getDisplayName() != null) ? user.getDisplayName() : "";
             String email = (user.getEmail() != null) ? user.getEmail() : "";
+
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
             sdf.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
             String loginTime = sdf.format(new Date());
@@ -306,6 +395,10 @@ public class SignIn extends AppCompatActivity {
             String address = null;
             String phone = null;
             String image = null;
+
+            if (user.getPhotoUrl() != null) {
+                image = user.getPhotoUrl().toString();
+            }
 
             FavoriteDBHelper dbHelper = new FavoriteDBHelper(this);
             boolean result = dbHelper.upsertUserSession(uid, name, email, loginTime, address, phone, image);
@@ -315,10 +408,12 @@ public class SignIn extends AppCompatActivity {
             } else {
                 Log.e(TAG, "Failed to save user session in DB.");
             }
+
+            // Navegar a la actividad principal
+            Intent intent = new Intent(SignIn.this, MainActivity.class);
+            startActivity(intent);
+            finish();
         }
-        Intent intent = new Intent(SignIn.this, MainActivity.class);
-        startActivity(intent);
-        finish();
     }
 
 
@@ -327,21 +422,30 @@ public class SignIn extends AppCompatActivity {
         super.onStart();
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser != null) {
-            if (pendingFacebookCredential != null) {
-                Log.d(TAG, "Intentando vincular la credencial de Facebook pendiente.");
-                currentUser.linkWithCredential(pendingFacebookCredential)
-                        .addOnCompleteListener(task -> {
-                            if (task.isSuccessful()) {
-                                Log.d(TAG, "Cuenta de Facebook vinculada exitosamente en onStart.");
-                                pendingFacebookCredential = null;
-                                navigateToMainActivity();
-                            } else {
-                                Log.e(TAG, "Error al vincular la cuenta de Facebook en onStart", task.getException());
-                            }
-                        });
+            String uid = currentUser.getUid();
+            String name = (currentUser.getDisplayName() != null) ? currentUser.getDisplayName() : "";
+            String email = (currentUser.getEmail() != null) ? currentUser.getEmail() : "";
+
+            // Obtener el tiempo actual en formato "yyyy-MM-dd HH:mm:ss"
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+            sdf.setTimeZone(TimeZone.getTimeZone("Europe/Madrid"));
+            String loginTime = sdf.format(new Date());
+
+            // Guardar el tiempo de inicio de sesión en SQLite
+            FavoriteDBHelper dbHelper = FavoriteDBHelper.getInstance(this);
+            boolean result = dbHelper.upsertUserSession(uid, name, email, loginTime, "", "", "");
+
+            if (result) {
+                Log.d(TAG, "User session saved successfully in SQLite.");
             } else {
-                navigateToMainActivity();
+                Log.e(TAG, "Failed to save user session in SQLite.");
             }
+
+            // Sincronizar con Firestore usando UserSync
+            new UserSync(this, uid).syncFromLocalToCloud();
+
+            // Navegar a la actividad principal si es necesario
+            navigateToMainActivity();
         } else {
             Log.d(TAG, "No user currently signed in");
         }

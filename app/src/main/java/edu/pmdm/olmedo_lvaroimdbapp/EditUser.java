@@ -13,7 +13,6 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
@@ -30,6 +29,9 @@ import androidx.core.content.ContextCompat;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.SetOptions;
 import com.hbb20.CountryCodePicker;
 import edu.pmdm.olmedo_lvaroimdbapp.models.FavoriteDBHelper;
 import edu.pmdm.olmedo_lvaroimdbapp.models.UserSession;
@@ -38,8 +40,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -51,25 +53,20 @@ public class EditUser extends AppCompatActivity {
     private static final String PERMISSION_IMAGE_MESSAGE =
             "Los permisos de cámara y almacenamiento son necesarios para seleccionar una imagen. Por favor, actívalos en Ajustes.";
 
-    // Referencias a vistas
     private EditText edtName, edtEmail, edtAddress, edtPhone;
     private ImageView userImageView;
     private CountryCodePicker countryCodePicker;
 
-    // Control de permisos y lanzadores
-    private ActivityResultLauncher<Intent> cameraResult;         // Nueva forma de capturar miniatura
+    private ActivityResultLauncher<Intent> cameraResult;
     private ActivityResultLauncher<String> galleryLauncher;
     private ActivityResultLauncher<String[]> permissionLauncher;
-    // Lanzador para seleccionar dirección (nueva funcionalidad)
     private ActivityResultLauncher<Intent> selectAddressLauncher;
 
-    // Variables de estado
     private String externalPhotoUrl = "";
     private FirebaseAuth mAuth;
     private FavoriteDBHelper dbHelper;
     private String currentUserId;
 
-    // Ejecutores para operaciones en segundo plano
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     @SuppressLint("MissingInflatedId")
@@ -78,7 +75,6 @@ public class EditUser extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_edit_user);
 
-        // 1) Inicializar FirebaseAuth
         mAuth = FirebaseAuth.getInstance();
         FirebaseUser firebaseUser = mAuth.getCurrentUser();
         if (firebaseUser == null) {
@@ -87,23 +83,22 @@ public class EditUser extends AppCompatActivity {
             return;
         }
         currentUserId = firebaseUser.getUid();
+        Log.d(TAG, "Usuario actual: " + currentUserId);
 
-        // 2) Inicializar DB local
         dbHelper = new FavoriteDBHelper(this);
 
-        // 3) Vincular vistas
         edtName = findViewById(R.id.etName);
         edtEmail = findViewById(R.id.etEmail);
         edtAddress = findViewById(R.id.etAddress);
         edtPhone = findViewById(R.id.etPhone);
         userImageView = findViewById(R.id.ivProfileImage);
+        countryCodePicker = findViewById(R.id.countryCodePicker);
 
         Button btnSelectAddress = findViewById(R.id.btnSelectAddress);
-        Button btnSelectImage   = findViewById(R.id.btnSelectImage);
-        Button btnSave          = findViewById(R.id.btnSave);
-        countryCodePicker       = findViewById(R.id.countryCodePicker);
+        Button btnSelectImage = findViewById(R.id.btnSelectImage);
+        Button btnSave = findViewById(R.id.btnSave);
 
-        // 4) Guardar y recuperar el código de país en SharedPreferences
+        // Configuración del CountryCodePicker
         SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
         int lastCode = prefs.getInt("LAST_COUNTRY_CODE", -1);
         if (lastCode != -1) {
@@ -118,37 +113,35 @@ public class EditUser extends AppCompatActivity {
             prefs.edit().putInt("LAST_COUNTRY_CODE", selectedCode).apply();
         });
 
-        // 5) Configurar ActivityResultLaunchers
-        // Cámara (usando miniatura)
+        // Registro de resultados para cámara, galería y permisos
         cameraResult = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK) {
                         Intent data = result.getData();
-                        if (data != null) {
-                            // Al capturar la foto como miniatura, la cámara la pasa en data.getExtras().get("data")
+                        if (data != null && data.getExtras() != null) {
                             Bitmap photo = (Bitmap) data.getExtras().get("data");
                             if (photo != null) {
                                 userImageView.setImageBitmap(photo);
                                 externalPhotoUrl = "";
+                                Log.d(TAG, "Foto capturada desde la cámara.");
                             }
                         }
                     }
                 }
         );
 
-        // Galería
         galleryLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 uri -> {
                     if (uri != null) {
                         loadImageIntoView(uri);
                         externalPhotoUrl = "";
+                        Log.d(TAG, "Imagen seleccionada desde la galería.");
                     }
                 }
         );
 
-        // Permisos de cámara / galería
         permissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestMultiplePermissions(),
                 result -> {
@@ -174,22 +167,22 @@ public class EditUser extends AppCompatActivity {
                 }
         );
 
-        // NUEVO: Configurar ActivityResultLauncher para seleccionar dirección en el mapa
         selectAddressLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                         String selectedAddress = result.getData().getStringExtra("SELECTED_ADDRESS");
-                        if (selectedAddress != null && !selectedAddress.isEmpty()) {
+                        if (!TextUtils.isEmpty(selectedAddress)) {
                             edtAddress.setText(selectedAddress);
+                            Log.d(TAG, "Dirección seleccionada: " + selectedAddress);
                         }
                     }
                 }
         );
 
-        // 6) Revisar si traemos una imagen por Intent
+        // Cargar imagen inicial si viene por intent
         String photoUriString = getIntent().getStringExtra("EXTRA_PROFILE_PICTURE_URI");
-        if (photoUriString != null && !photoUriString.isEmpty()) {
+        if (!TextUtils.isEmpty(photoUriString)) {
             Uri photoUri = Uri.parse(photoUriString);
             loadImageIntoView(photoUri);
             if (photoUriString.startsWith("http")) {
@@ -197,11 +190,8 @@ public class EditUser extends AppCompatActivity {
             }
         }
 
-        // 7) Cargar datos del usuario desde la BD local
         loadUserDataFromLocalDB(currentUserId);
 
-        // 8) Listeners de botones
-        // Al pulsar el botón de dirección se abrirá la nueva actividad para seleccionar dirección
         btnSelectAddress.setOnClickListener(v -> abrirSelectAddressActivity());
         btnSelectImage.setOnClickListener(v -> checkImagePermissionsAndShowOptions());
         btnSave.setOnClickListener(v -> saveUserData());
@@ -216,45 +206,100 @@ public class EditUser extends AppCompatActivity {
     }
 
     /**
-     * Carga los datos del usuario desde la tabla user_sessions (local DB).
+     * Carga los datos del usuario desde Firestore y actualiza la base de datos local.
      */
     private void loadUserDataFromLocalDB(String userId) {
-        UserSession session = dbHelper.getUserSession(userId);
-        if (session != null) {
-            // Rellenar campos
-            edtName.setText(session.getNombre());
-            edtEmail.setText(session.getEmail());
-            edtAddress.setText(session.getAddress());
+        FirebaseFirestore firestore = FirebaseFirestore.getInstance();
+        DocumentReference userDocRef = firestore.collection("users").document(userId);
+        userDocRef.get().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                if (task.getResult().exists()) {
+                    Log.d(TAG, "Datos encontrados en Firestore.");
+                    String nombre = task.getResult().getString("nombre");
+                    String email = task.getResult().getString("email");
+                    String encryptedAddress = task.getResult().getString("address");
+                    String encryptedPhone = task.getResult().getString("phone");
+                    String image = task.getResult().getString("image");
 
-            // Si el teléfono en BD se guardó como "+34 600123456" (prefijo + espacio + número)
-            String phoneFull = session.getPhone();
-            if (phoneFull != null && !phoneFull.isEmpty()) {
-                // Quitar el signo + inicial
-                phoneFull = phoneFull.replace("+", ""); // p.ej. "34 600123456"
+                    // Desencriptar campos
+                    String address = encryptedAddress != null ? EncryptionHelper.decryptAddress(encryptedAddress) : "";
+                    String phone = encryptedPhone != null ? EncryptionHelper.decryptPhone(encryptedPhone) : "";
 
-                // Dividir en dos partes (el prefijo y el número)
-                if (phoneFull.contains(" ")) {
-                    String[] parts = phoneFull.split(" ", 2);
-                    String codePart   = parts[0];
-                    String numberPart = parts[1];
+                    // Guardar en SQLite (ya encriptados)
+                    dbHelper.upsertUserSession(
+                            userId,
+                            nombre != null ? nombre : "",
+                            email != null ? email : "",
+                            "", // login_time no se utiliza aquí
+                            encryptedAddress != null ? encryptedAddress : "",
+                            encryptedPhone != null ? encryptedPhone : "",
+                            image != null ? image : ""
+                    );
 
-                    try {
-                        int codeInt = Integer.parseInt(codePart);
-                        countryCodePicker.setCountryForPhoneCode(codeInt);
-                        edtPhone.setText(numberPart);
-                    } catch (NumberFormatException e) {
-                        Log.e(TAG, "Error parseando prefijo de teléfono", e);
-                        // fallback: lo dejamos tal cual
-                        edtPhone.setText(phoneFull);
+                    edtName.setText(nombre != null ? nombre : "");
+                    edtEmail.setText(email != null ? email : "");
+                    edtAddress.setText(address);
+
+                    if (!TextUtils.isEmpty(phone)) {
+                        phone = phone.replace("+", "");
+                        if (phone.contains(" ")) {
+                            String[] parts = phone.split(" ", 2);
+                            try {
+                                int codeInt = Integer.parseInt(parts[0]);
+                                countryCodePicker.setCountryForPhoneCode(codeInt);
+                                edtPhone.setText(parts[1]);
+                            } catch (NumberFormatException e) {
+                                Log.e(TAG, "Error parseando el prefijo del teléfono.", e);
+                                edtPhone.setText(phone);
+                            }
+                        } else {
+                            edtPhone.setText(phone);
+                        }
+                    }
+
+                    if (!TextUtils.isEmpty(image)) {
+                        if (image.startsWith("http")) {
+                            loadImageFromUrl(userImageView, image);
+                        } else {
+                            decodeBase64Image(image);
+                        }
                     }
                 } else {
-                    // Caso de que no haya espacio
-                    edtPhone.setText(phoneFull);
+                    Log.w(TAG, "No existen datos en Firestore. Se carga desde SQLite.");
+                    cargarDesdeSQLite(userId);
+                }
+            } else {
+                Log.e(TAG, "Error obteniendo datos de Firestore.", task.getException());
+                cargarDesdeSQLite(userId);
+            }
+        });
+    }
+
+    private void cargarDesdeSQLite(String userId) {
+        UserSession session = dbHelper.getUserSession(userId);
+        if (session != null) {
+            edtName.setText(session.getNombre());
+            edtEmail.setText(session.getEmail());
+            String decryptedAddress = EncryptionHelper.decryptAddress(session.getAddress());
+            String decryptedPhone = EncryptionHelper.decryptPhone(session.getPhone());
+            edtAddress.setText(decryptedAddress);
+            if (!TextUtils.isEmpty(decryptedPhone)) {
+                String phoneTemp = decryptedPhone.replace("+", "");
+                if (phoneTemp.contains(" ")) {
+                    String[] parts = phoneTemp.split(" ", 2);
+                    try {
+                        int codeInt = Integer.parseInt(parts[0]);
+                        countryCodePicker.setCountryForPhoneCode(codeInt);
+                        edtPhone.setText(parts[1]);
+                    } catch (NumberFormatException e) {
+                        Log.e(TAG, "Error parseando el prefijo del teléfono desde SQLite.", e);
+                        edtPhone.setText(decryptedPhone);
+                    }
+                } else {
+                    edtPhone.setText(decryptedPhone);
                 }
             }
-
-            // Cargar imagen (URL o Base64)
-            if (session.getImage() != null && !session.getImage().isEmpty()) {
+            if (!TextUtils.isEmpty(session.getImage())) {
                 if (session.getImage().startsWith("http")) {
                     loadImageFromUrl(userImageView, session.getImage());
                 } else {
@@ -262,73 +307,101 @@ public class EditUser extends AppCompatActivity {
                 }
             }
         } else {
-            Log.w(TAG, "No se encontró usuario en BD local con userId: " + userId);
+            Log.w(TAG, "No se encontró el usuario en SQLite con userId: " + userId);
         }
     }
 
-    /**
-     * Guarda/actualiza los datos del usuario en la tabla user_sessions local.
-     */
     private void saveUserData() {
         // 1. Obtener datos
-        String name    = edtName.getText().toString().trim();
-        String email   = edtEmail.getText().toString().trim();
+        String name = edtName.getText().toString().trim();
+        String email = edtEmail.getText().toString().trim();
         String address = edtAddress.getText().toString().trim();
-
-        // Combinar prefijo + número con espacio
         String phoneNumber = edtPhone.getText().toString().trim();
         String countryCode = countryCodePicker.getSelectedCountryCode();
-        // Ej: "+34 600123456"
         String phoneToSave = "+" + countryCode + " " + phoneNumber;
 
-        // Validaciones simples
+        // Validación básica
         if (TextUtils.isEmpty(name)) {
             Toast.makeText(this, "El nombre no puede estar vacío", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Convertir la imagen a Base64
+        // 2. Encriptar dirección y teléfono con validación
+        String encryptedAddress = address.isEmpty() ? "" : EncryptionHelper.encryptAddress(address);
+        String encryptedPhone = phoneToSave.isEmpty() ? "" : EncryptionHelper.encryptPhone(phoneToSave);
+
+        if (encryptedAddress == null) {
+            Log.e(TAG, "Encryption de Address devolvió null. Usando cadena vacía.");
+            encryptedAddress = "";
+        }
+        if (encryptedPhone == null) {
+            Log.e(TAG, "Encryption de Phone devolvió null. Usando cadena vacía.");
+            encryptedPhone = "";
+        }
+
+        Log.d(TAG, "Datos encriptados - Address: " + encryptedAddress + ", Phone: " + encryptedPhone);
+
+        // 3. Convertir imagen a Base64
         String base64Image = convertImageToBase64(userImageView);
+        Log.d(TAG, "Imagen convertida a Base64.");
 
-        // Crear timestamp
-        String loginTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
-                Locale.getDefault()).format(new Date());
+        // 4. Crear timestamp
+        String loginTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+        Log.d(TAG, "Timestamp generado: " + loginTime);
 
-        // 2. Hacer upsert en la tabla user_sessions
-        boolean success = dbHelper.upsertUserSession(
+        // 5. Guardar en SQLite
+        boolean localSaved = dbHelper.upsertUserSession(
                 currentUserId,
                 name,
                 email,
                 loginTime,
-                address,
-                phoneToSave,
+                encryptedAddress,
+                encryptedPhone,
                 base64Image
         );
 
-        if (success) {
-            Toast.makeText(this, "Datos guardados correctamente", Toast.LENGTH_SHORT).show();
-            finish();
-        } else {
-            Toast.makeText(this, "Error al guardar datos", Toast.LENGTH_SHORT).show();
+        if (!localSaved) {
+            Toast.makeText(this, "Error al guardar datos en SQLite", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "Fallo al guardar en SQLite.");
+            return;
         }
+        Log.d(TAG, "Datos guardados en SQLite correctamente.");
+
+        // 6. Guardar en Firestore
+        FirebaseFirestore firestore = FirebaseFirestore.getInstance();
+        DocumentReference userDocRef = firestore.collection("users").document(currentUserId);
+        Map<String, Object> userData = new HashMap<>();
+        userData.put("nombre", name);
+        userData.put("email", email);
+        userData.put("address", encryptedAddress);
+        userData.put("phone", encryptedPhone);
+        userData.put("image", base64Image);
+
+        userDocRef.set(userData, SetOptions.merge())
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Datos guardados correctamente en Firestore.");
+                    Toast.makeText(EditUser.this, "Datos guardados correctamente en la nube", Toast.LENGTH_SHORT).show();
+                    finish();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error al guardar datos en Firestore.", e);
+                    Toast.makeText(EditUser.this, "Error al guardar datos en la nube", Toast.LENGTH_SHORT).show();
+                });
     }
 
     /**
-     * Verifica permisos e invoca el diálogo de opciones de imagen.
+     * Verifica permisos e invoca el diálogo de selección de imagen.
      */
     private void checkImagePermissionsAndShowOptions() {
-        ArrayList<String> permissionsList = new ArrayList<>();
-        permissionsList.add(Manifest.permission.CAMERA);
-
-        // Para la galería
+        String[] permissions;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissionsList.add(Manifest.permission.READ_MEDIA_IMAGES);
+            permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.READ_MEDIA_IMAGES};
         } else {
-            permissionsList.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+            permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.READ_EXTERNAL_STORAGE};
         }
 
         boolean permissionsGranted = true;
-        for (String permission : permissionsList) {
+        for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission)
                     != PackageManager.PERMISSION_GRANTED) {
                 permissionsGranted = false;
@@ -338,7 +411,7 @@ public class EditUser extends AppCompatActivity {
         if (permissionsGranted) {
             showImageOptionsDialog();
         } else {
-            permissionLauncher.launch(permissionsList.toArray(new String[0]));
+            permissionLauncher.launch(permissions);
         }
     }
 
@@ -351,15 +424,14 @@ public class EditUser extends AppCompatActivity {
                 .setTitle("Seleccionar imagen")
                 .setItems(items, (dialog, which) -> {
                     switch (which) {
-                        case 0: // Cámara
-                            // Versión simple (miniatura)
+                        case 0:
                             Intent cameraIntent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
                             cameraResult.launch(cameraIntent);
                             break;
-                        case 1: // Galería
+                        case 1:
                             galleryLauncher.launch("image/*");
                             break;
-                        case 2: // URL externa
+                        case 2:
                             showUrlDialog();
                             break;
                     }
@@ -369,7 +441,7 @@ public class EditUser extends AppCompatActivity {
     }
 
     /**
-     * Muestra un diálogo para introducir la URL de la imagen.
+     * Muestra un diálogo para introducir la URL de una imagen.
      */
     private void showUrlDialog() {
         final EditText input = new EditText(this);
@@ -380,9 +452,10 @@ public class EditUser extends AppCompatActivity {
                 .setView(input)
                 .setPositiveButton("OK", (dialog, which) -> {
                     String url = input.getText().toString().trim();
-                    if (!url.isEmpty()) {
+                    if (!TextUtils.isEmpty(url)) {
                         externalPhotoUrl = url;
                         loadImageFromUrl(userImageView, url);
+                        Log.d(TAG, "URL externa ingresada: " + url);
                     } else {
                         Toast.makeText(this, "URL vacía", Toast.LENGTH_SHORT).show();
                     }
@@ -392,7 +465,7 @@ public class EditUser extends AppCompatActivity {
     }
 
     /**
-     * Carga la imagen desde la galería o una URI local en segundo plano.
+     * Carga la imagen desde una URI en segundo plano.
      */
     private void loadImageIntoView(Uri uri) {
         executorService.execute(() -> {
@@ -404,7 +477,7 @@ public class EditUser extends AppCompatActivity {
             } catch (IOException e) {
                 Log.e(TAG, "Error cargando imagen desde URI", e);
             }
-            final Bitmap finalBitmap = bitmap;
+            Bitmap finalBitmap = bitmap;
             runOnUiThread(() -> {
                 if (finalBitmap != null) {
                     userImageView.setImageBitmap(finalBitmap);
@@ -416,26 +489,19 @@ public class EditUser extends AppCompatActivity {
     }
 
     /**
-     * Carga la imagen desde URL en segundo plano.
+     * Carga la imagen desde una URL en segundo plano.
      */
     private void loadImageFromUrl(ImageView imageView, String url) {
-        if (url == null || url.isEmpty()) {
+        if (TextUtils.isEmpty(url)) {
             imageView.setImageResource(R.mipmap.ic_launcher_round);
             return;
         }
         executorService.execute(() -> {
             Bitmap bitmap = null;
-            InputStream inputStream = null;
-            try {
-                inputStream = new java.net.URL(url).openStream();
-                // Opcional: ajustar inSampleSize, etc.
+            try (InputStream inputStream = new java.net.URL(url).openStream()) {
                 bitmap = BitmapFactory.decodeStream(inputStream);
             } catch (IOException e) {
-                Log.e(TAG, "Error loading image from URL", e);
-            } finally {
-                if (inputStream != null) {
-                    try { inputStream.close(); } catch (IOException ignored) {}
-                }
+                Log.e(TAG, "Error cargando imagen desde URL", e);
             }
             Bitmap finalBitmap = bitmap;
             runOnUiThread(() -> {
@@ -449,17 +515,23 @@ public class EditUser extends AppCompatActivity {
     }
 
     /**
-     * Convierte el Drawable del ImageView a un Bitmap sin cast directo.
+     * Convierte un Drawable a Bitmap.
      */
     private Bitmap drawableToBitmap(Drawable drawable) {
+        if (drawable == null) {
+            Log.e(TAG, "Drawable nulo.");
+            return null;
+        }
         if (drawable instanceof BitmapDrawable) {
             return ((BitmapDrawable) drawable).getBitmap();
         }
-        Bitmap bitmap = Bitmap.createBitmap(
-                drawable.getIntrinsicWidth(),
-                drawable.getIntrinsicHeight(),
-                Bitmap.Config.ARGB_8888
-        );
+        int width = drawable.getIntrinsicWidth();
+        int height = drawable.getIntrinsicHeight();
+        if (width <= 0 || height <= 0) {
+            Log.e(TAG, "Dimensiones inválidas del Drawable.");
+            return null;
+        }
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         drawable.draw(canvas);
@@ -467,21 +539,28 @@ public class EditUser extends AppCompatActivity {
     }
 
     /**
-     * Convierte la imagen del ImageView a Base64 para la BD.
+     * Convierte la imagen del ImageView a Base64.
      */
     private String convertImageToBase64(ImageView imageView) {
-        if (imageView.getDrawable() == null) {
+        Drawable drawable = imageView.getDrawable();
+        if (drawable == null) {
+            Log.w(TAG, "No hay imagen asignada. Se asigna imagen predeterminada.");
+            imageView.setImageResource(R.mipmap.ic_launcher_round);
+            drawable = imageView.getDrawable();
+        }
+        Bitmap bitmap = drawableToBitmap(drawable);
+        if (bitmap == null) {
+            Log.e(TAG, "Error al convertir Drawable a Bitmap.");
             return "";
         }
-        Bitmap bitmap = drawableToBitmap(imageView.getDrawable());
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, byteArrayOutputStream);
-        byte[] byteArray = byteArrayOutputStream.toByteArray();
-        return Base64.encodeToString(byteArray, Base64.DEFAULT);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos);
+        byte[] imageBytes = baos.toByteArray();
+        return Base64.encodeToString(imageBytes, Base64.DEFAULT);
     }
 
     /**
-     * Decodifica una cadena Base64 y la muestra en el ImageView.
+     * Decodifica una imagen Base64 y la muestra en el ImageView.
      */
     private void decodeBase64Image(String base64Image) {
         try {
@@ -495,7 +574,7 @@ public class EditUser extends AppCompatActivity {
     }
 
     /**
-     * Muestra un diálogo para ir a Ajustes si faltan permisos.
+     * Muestra un diálogo para que el usuario vaya a Ajustes y active los permisos necesarios.
      */
     private void showSettingsDialog() {
         new AlertDialog.Builder(this)
@@ -503,9 +582,7 @@ public class EditUser extends AppCompatActivity {
                 .setMessage(PERMISSION_IMAGE_MESSAGE)
                 .setPositiveButton("Ir a Ajustes", (dialog, which) -> {
                     try {
-                        Intent intent = new Intent(
-                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                        );
+                        Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                         intent.setData(Uri.parse("package:" + getPackageName()));
                         startActivity(intent);
                     } catch (Exception e) {

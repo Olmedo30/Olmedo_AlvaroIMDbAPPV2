@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.pmdm.olmedo_lvaroimdbapp.sync.UserSync;
+
 /**
  * Clase para manejar la base de datos "favorites.db" que incluye
  * la tabla "favorites" y la tabla "user_sessions".
@@ -110,33 +112,37 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
 
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-        values.put(COLUMN_SESSION_USER_ID, userId);
-        values.put(COLUMN_NOMBRE, nombre);
-        values.put(COLUMN_EMAIL, email);
-        values.put(COLUMN_LOGIN_TIME, loginTime);
-        // logout_time no lo estamos pasando, lo podrías actualizar si lo necesitas
-        values.put(COLUMN_ADDRESS, address);
-        values.put(COLUMN_PHONE, phone);
-        values.put(COLUMN_IMAGE, image);
 
-        // insertWithOnConflict con CONFLICT_IGNORE
+        // Asegúrate de que todos los valores sean válidos antes de insertarlos
+        values.put(COLUMN_SESSION_USER_ID, userId);
+        values.put(COLUMN_NOMBRE, nombre != null ? nombre : "");
+        values.put(COLUMN_EMAIL, email != null ? email : "");
+        values.put(COLUMN_LOGIN_TIME, loginTime != null ? loginTime : "");
+        values.put(COLUMN_LOGOUT_TIME, ""); // logout_time no lo estamos pasando
+        values.put(COLUMN_ADDRESS, address != null ? address : "");
+        values.put(COLUMN_PHONE, phone != null ? phone : "");
+        values.put(COLUMN_IMAGE, image != null ? image : "");
+
+        // Intenta insertar el registro
         long result = db.insertWithOnConflict(
                 TABLE_USER_SESSIONS,
                 null,
                 values,
                 SQLiteDatabase.CONFLICT_IGNORE
         );
+
         if (result == -1) {
-            // No se insertó => ya existe userId => hacemos update
+            // Si falla la inserción, intenta actualizar el registro existente
             int rows = db.update(
                     TABLE_USER_SESSIONS,
                     values,
                     COLUMN_SESSION_USER_ID + "=?",
                     new String[]{userId}
             );
-            return rows > 0;
+            return rows > 0; // Retorna true si se actualizó al menos una fila
         }
-        return true;
+
+        return true; // Retorna true si se insertó correctamente
     }
 
     public UserSession getUserSession(String userId) {
@@ -287,10 +293,86 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         return (rowsAffected > 0);  // true si se actualizó al menos 1 fila
     }
 
+    public boolean addUser(UserSession user) {
+        if (user == null || user.getUserId() == null) {
+            Log.e("SQLiteHelper", "No se puede agregar un usuario nulo o con ID nulo.");
+            return false;
+        }
+
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+
+        values.put(COLUMN_USER_ID, user.getUserId());
+        values.put(COLUMN_NOMBRE, user.getNombre());
+        values.put(COLUMN_EMAIL, user.getEmail());
+        values.put(COLUMN_LOGIN_TIME, user.getLoginTime());
+        values.put(COLUMN_LOGOUT_TIME, user.getLogoutTime());
+        values.put(COLUMN_ADDRESS, user.getAddress());
+        values.put(COLUMN_PHONE, user.getPhone());
+        values.put(COLUMN_IMAGE, user.getImage());
+
+        long result = db.insertWithOnConflict(TABLE_USER_SESSIONS, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        if (result == -1) {
+            Log.e("SQLiteHelper", "Error al insertar/actualizar usuario: " + user.getUserId());
+            return false;
+        } else {
+            Log.d("SQLiteHelper", "Usuario insertado/actualizado exitosamente: " + user.getUserId());
+            return true;
+        }
+    }
+
+    public UserSession getUser(String userId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = null;
+        UserSession user = null;
+        try {
+            cursor = db.query(
+                    TABLE_USER_SESSIONS,
+                    null, // Todas las columnas
+                    COLUMN_USER_ID + "=?",
+                    new String[]{userId},
+                    null,
+                    null,
+                    null
+            );
+
+            if (cursor != null && cursor.moveToFirst()) {
+                String id = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USER_ID));
+                String name = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_NOMBRE));
+                String email = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_EMAIL));
+                String loginTime = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LOGIN_TIME));
+                String logoutTime = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LOGOUT_TIME));
+                String address = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ADDRESS));
+                String phone = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PHONE));
+                String image = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_IMAGE));
+
+                user = new UserSession(id, name, email, loginTime, logoutTime, address, phone, image);
+            }
+        } catch (Exception e) {
+            Log.e("SQLiteHelper", "Error al obtener usuario: " + userId, e);
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return user;
+    }
+
     public void deleteAllFavorites(String userId) {
         SQLiteDatabase db = this.getWritableDatabase();
         int deletedRows = db.delete("favorites", "user_id=?", new String[]{userId});
         db.close();
         Log.d("FavoriteDBHelper", "Se eliminaron " + deletedRows + " favoritos del usuario: " + userId);
+    }
+
+    public boolean deleteUserSession(String userId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int deletedRows = db.delete(TABLE_USER_SESSIONS, COLUMN_SESSION_USER_ID + "=?", new String[]{userId});
+        db.close();
+        if (deletedRows > 0) {
+            Log.d(TAG, "Usuario eliminado de la base de datos local: " + userId);
+            return true;
+        } else {
+            Log.w(TAG, "No se encontró ningún usuario con el ID: " + userId);
+            return false;
+        }
     }
 }
