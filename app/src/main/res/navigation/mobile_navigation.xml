@@ -7,19 +7,19 @@
 
     <fragment
         android:id="@+id/nav_home"
-        android:name="edu.pmdm.olmedo_lvaroimdbapp.ui.home.HomeFragment"
+        android:name="edu.pmdm.olmedo_lvaroimdbapp.ui.top10.Top10"
         android:label="@string/menu_home"
         tools:layout="@layout/fragment_home" />
 
     <fragment
         android:id="@+id/nav_gallery"
-        android:name="edu.pmdm.olmedo_lvaroimdbapp.ui.gallery.GalleryFragment"
+        android:name="edu.pmdm.olmedo_lvaroimdbapp.ui.favoritos.Favoritos"
         android:label="@string/menu_gallery"
         tools:layout="@layout/fragment_gallery" />
 
     <fragment
         android:id="@+id/nav_slideshow"
-        android:name="edu.pmdm.olmedo_lvaroimdbapp.ui.slideshow.SlideshowFragment"
+        android:name="edu.pmdm.olmedo_lvaroimdbapp.ui.searchMovie.SearchMovie"
         android:label="@string/menu_slideshow"
         tools:layout="@layout/fragment_slideshow" />
 </navigation>

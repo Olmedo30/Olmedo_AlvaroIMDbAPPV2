@@ -22,4 +22,5 @@
     <string name="facebook_app_id">1341528750337482</string>
     <string name="fb_login_protocol_scheme">fb1341528750337482</string>
     <string name="facebook_client_token">ccbbf6f25e83beb5c063ca258ea5786d</string>
+    <string name="google_maps_key">AIzaSyAER7D-uvYpBOG3wZjz9z3AeGulqAci-OU</string>
 </resources>

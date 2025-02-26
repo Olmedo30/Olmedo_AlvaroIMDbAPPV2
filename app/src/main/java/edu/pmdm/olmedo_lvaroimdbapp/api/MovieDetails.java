@@ -62,7 +62,6 @@ public class MovieDetails {
                 }
             }
 
-            //Devuelve un nuevo objeto MovieDetails con los datos obtenidos
             return new MovieDetails(releaseDate, rating);
         } catch (IOException e) {
             e.printStackTrace();
@@ -70,7 +69,6 @@ public class MovieDetails {
             e.printStackTrace();
         }
 
-        //Si da error devuelve valores predeterminados
         return new MovieDetails("Fecha no disponible", "Rating no disponible");
     }
 }
