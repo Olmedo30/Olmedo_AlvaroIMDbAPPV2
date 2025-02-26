@@ -43,7 +43,7 @@ public class UserSession {
     }
 
     public String getAddress() {
-        return address; // Getter para address
+        return address;
     }
 
     public String getPhone() {

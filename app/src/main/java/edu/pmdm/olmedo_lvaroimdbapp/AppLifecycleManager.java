@@ -25,21 +25,17 @@ public class AppLifecycleManager extends Application implements Application.Acti
     private static final String TAG = "AppLifecycleManager";
     private int activityReferences = 0;
     private boolean isActivityChangingConfigurations = false;
-    private boolean isLoginTimeUpdated = false; // Evita doble actualización del login_time
-    private String lastUserId = null; // Último usuario autenticado
+    private boolean isLoginTimeUpdated = false;
+    private String lastUserId = null;
 
     @Override
     public void onCreate() {
         super.onCreate();
         registerActivityLifecycleCallbacks(this);
-
-        // Cargar el último usuario registrado en SharedPreferences
         SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         lastUserId = prefs.getString("LAST_USER_ID", null);
-
-        // Si la app fue cerrada a la fuerza, registrar logout del último usuario
         if (lastUserId != null) {
-            registerForcedLogout(lastUserId);
+            forzarLogOut(lastUserId);
         }
     }
 
@@ -48,19 +44,14 @@ public class AppLifecycleManager extends Application implements Application.Acti
 
     @Override
     public void onActivityStarted(@NonNull Activity activity) {
-        Log.d(TAG, activity.getLocalClassName() + " - onActivityStarted");
-
         FirebaseUser firebaseUser = FirebaseAuth.getInstance().getCurrentUser();
         if (firebaseUser != null) {
             String userId = firebaseUser.getUid();
 
-            // 🔹 Si el usuario ha cambiado o no se ha actualizado login_time, registrarlo
             if (!userId.equals(lastUserId) || !isLoginTimeUpdated) {
-                updateLoginTime(userId);
+                actualizarLogIn(userId);
                 lastUserId = userId;
-                isLoginTimeUpdated = true; // Marcar como actualizado
-
-                // 🔹 Guardar el nuevo usuario en SharedPreferences
+                isLoginTimeUpdated = true;
                 SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
                 prefs.edit().putString("LAST_USER_ID", userId).apply();
             }
@@ -85,7 +76,7 @@ public class AppLifecycleManager extends Application implements Application.Acti
         if (--activityReferences == 0 && !isActivityChangingConfigurations) {
             FirebaseUser firebaseUser = FirebaseAuth.getInstance().getCurrentUser();
             if (firebaseUser != null) {
-                updateLogoutTime(firebaseUser.getUid());
+                actualizarLogout(firebaseUser.getUid());
             }
         }
     }
@@ -96,11 +87,9 @@ public class AppLifecycleManager extends Application implements Application.Acti
     @Override
     public void onActivityDestroyed(@NonNull Activity activity) {}
 
-    /**
-     * Registra el login_time del usuario.
-     */
-    private void updateLoginTime(String userId) {
-        String currentTime = getCurrentTime();
+    // Registra el login del usuario.
+    private void actualizarLogIn(String userId) {
+        String currentTime = obtenerTiempo();
         FavoriteDBHelper dbHelper = FavoriteDBHelper.getInstance(this);
         UserSession user = dbHelper.getUser(userId);
 
@@ -116,11 +105,9 @@ public class AppLifecycleManager extends Application implements Application.Acti
         new UserSync(this, userId).syncActivityLog();
     }
 
-    /**
-     * Registra el logout_time del usuario y permite volver a registrar logins.
-     */
-    private void updateLogoutTime(String userId) {
-        String currentTime = getCurrentTime();
+    // Registra el logout del usuario.
+    private void actualizarLogout(String userId) {
+        String currentTime = obtenerTiempo();
         FavoriteDBHelper dbHelper = FavoriteDBHelper.getInstance(this);
         UserSession user = dbHelper.getUser(userId);
 
@@ -130,36 +117,17 @@ public class AppLifecycleManager extends Application implements Application.Acti
             Log.d(TAG, "Logout registrado para usuario: " + userId);
             new UserSync(this, userId).syncActivityLog();
         }
-
-        // Habilitar el booleano para permitir registrar logins nuevamente
         isLoginTimeUpdated = false;
     }
 
-    /**
-     * Si la app fue cerrada a la fuerza, registrar el logout del último usuario.
-     */
-    private void registerForcedLogout(String userId) {
+    // Registra el cierre forzado del usuario.
+    private void forzarLogOut(String userId) {
         Log.d(TAG, "Detectado cierre forzado. Registrando logout para " + userId);
-        updateLogoutTime(userId);
+        actualizarLogout(userId);
     }
 
-    /**
-     * Restablece el estado de login para permitir nuevos logins tras un logout.
-     */
-    public void resetLoginState() {
-        isLoginTimeUpdated = false;
-        lastUserId = null;
-
-        SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
-        prefs.edit().remove("LAST_USER_ID").apply();
-
-        Log.d(TAG, "Estado de login restablecido. Se puede iniciar sesión nuevamente.");
-    }
-
-    /**
-     * Obtiene la fecha y hora actual en formato "yyyy-MM-dd HH:mm:ss".
-     */
-    private String getCurrentTime() {
+    // Devuelve la fecha y hora actual en formato "yyyy-MM-dd HH:mm:ss"
+    private String obtenerTiempo() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
         return sdf.format(new Date());
     }

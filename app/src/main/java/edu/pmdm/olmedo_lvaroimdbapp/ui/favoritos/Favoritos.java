@@ -52,7 +52,7 @@ public class Favoritos extends Fragment {
                              Bundle savedInstanceState) {
         View root = inflater.inflate(R.layout.fragment_gallery, container, false);
 
-        // Verifica si el usuario está autenticado
+        // Verificar si el usuario está autenticado
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         uid = (currentUser != null) ? currentUser.getUid() : null;
         if (uid == null) {
@@ -60,29 +60,25 @@ public class Favoritos extends Fragment {
             return root;
         }
 
-        // Inicializa la base de datos y la sincronización con Firebase
         dbHelper = new FavoriteDBHelper(requireContext());
         favoritesSync = new FavoritesSync(requireContext(), uid);
 
-        // Configura RecyclerView
         recyclerView = root.findViewById(R.id.recycler_view);
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new MovieAdapter();
         recyclerView.setAdapter(adapter);
 
-        // Configura el botón de compartir
         Button shareButton = root.findViewById(R.id.btn_share);
         shareButton.setOnClickListener(v -> handleShareButtonClick());
 
-        // Inicializa permisos
         initializePermissionLauncher();
 
-        // Sincroniza favoritos y actualiza la UI automáticamente
         syncAndUpdateUI();
 
         return root;
     }
 
+    // Sincroniza los favoritos
     private void syncAndUpdateUI() {
         favoritesSync.syncFavorites(() -> {
             requireActivity().runOnUiThread(() -> {
@@ -93,6 +89,7 @@ public class Favoritos extends Fragment {
         });
     }
 
+    // Comprueba si tiene los permisos
     private void initializePermissionLauncher() {
         requestPermissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(),
@@ -105,6 +102,7 @@ public class Favoritos extends Fragment {
                 });
     }
 
+    //Controla el clic en el botón de compartir
     private void handleShareButtonClick() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.BLUETOOTH_CONNECT) ==
@@ -118,6 +116,7 @@ public class Favoritos extends Fragment {
         }
     }
 
+    // Obtiene las películas y muestra un diálogo con la información
     private void fetchMoviesAndShowDialog() {
         if (movieList.isEmpty()) {
             Toast.makeText(requireContext(), "No hay películas en favoritos.", Toast.LENGTH_SHORT).show();
@@ -177,19 +176,15 @@ public class Favoritos extends Fragment {
                 startActivity(intent);
             });
 
-            // 🔥 Añadiendo funcionalidad de eliminación con onLongClick
             holder.itemView.setOnLongClickListener(v -> {
                 int itemPosition = holder.getAdapterPosition();
                 if (itemPosition != RecyclerView.NO_POSITION && itemPosition < movieList.size()) {
                     Movie movieToDelete = movieList.get(itemPosition);
 
-                    // Elimina la película de la base de datos local
                     boolean deletedLocal = dbHelper.deleteFavorite(uid, movieToDelete.getTconst());
                     if (deletedLocal) {
-                        // Elimina la película de la nube
                         favoritesSync.removeMovieFromCloud(movieToDelete.getTconst());
 
-                        // Elimina la película de la lista y actualiza el RecyclerView
                         movieList.remove(itemPosition);
                         notifyItemRemoved(itemPosition);
                         notifyItemRangeChanged(itemPosition, movieList.size());

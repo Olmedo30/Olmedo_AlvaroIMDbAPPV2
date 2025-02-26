@@ -312,21 +312,47 @@ public class EditUser extends AppCompatActivity {
     }
 
     private void saveUserData() {
-        // 1. Obtener datos
         String name = edtName.getText().toString().trim();
         String email = edtEmail.getText().toString().trim();
         String address = edtAddress.getText().toString().trim();
         String phoneNumber = edtPhone.getText().toString().trim();
         String countryCode = countryCodePicker.getSelectedCountryCode();
+        String countryNameCode = countryCodePicker.getSelectedCountryNameCode();
         String phoneToSave = "+" + countryCode + " " + phoneNumber;
 
-        // Validación básica
         if (TextUtils.isEmpty(name)) {
             Toast.makeText(this, "El nombre no puede estar vacío", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // 2. Encriptar dirección y teléfono con validación
+        boolean isPhoneValid = false;
+        if (!phoneNumber.isEmpty()) {
+            String expectedPrefix = "+" + countryCode;
+            if (phoneToSave.startsWith(expectedPrefix)) {
+                String numericPart = phoneToSave.substring(expectedPrefix.length()).replaceAll("\\s+", "");
+                int expectedLength = 0;
+                switch (countryNameCode) {
+                    case "ES":
+                        expectedLength = 9;
+                        break;
+                    case "US":
+                        expectedLength = 10;
+                        break;
+                    default:
+                        expectedLength = numericPart.length();
+                        break;
+                }
+                if (numericPart.length() == expectedLength) {
+                    isPhoneValid = true;
+                }
+            }
+        }
+
+        if (!isPhoneValid) {
+            Toast.makeText(this, "El número de teléfono no es válido para el país seleccionado", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         String encryptedAddress = address.isEmpty() ? "" : EncryptionHelper.encryptAddress(address);
         String encryptedPhone = phoneToSave.isEmpty() ? "" : EncryptionHelper.encryptPhone(phoneToSave);
 
@@ -341,15 +367,12 @@ public class EditUser extends AppCompatActivity {
 
         Log.d(TAG, "Datos encriptados - Address: " + encryptedAddress + ", Phone: " + encryptedPhone);
 
-        // 3. Convertir imagen a Base64
         String base64Image = convertImageToBase64(userImageView);
         Log.d(TAG, "Imagen convertida a Base64.");
 
-        // 4. Crear timestamp
         String loginTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
         Log.d(TAG, "Timestamp generado: " + loginTime);
 
-        // 5. Guardar en SQLite
         boolean localSaved = dbHelper.upsertUserSession(
                 currentUserId,
                 name,
@@ -365,9 +388,9 @@ public class EditUser extends AppCompatActivity {
             Log.e(TAG, "Fallo al guardar en SQLite.");
             return;
         }
+
         Log.d(TAG, "Datos guardados en SQLite correctamente.");
 
-        // 6. Guardar en Firestore
         FirebaseFirestore firestore = FirebaseFirestore.getInstance();
         DocumentReference userDocRef = firestore.collection("users").document(currentUserId);
         Map<String, Object> userData = new HashMap<>();

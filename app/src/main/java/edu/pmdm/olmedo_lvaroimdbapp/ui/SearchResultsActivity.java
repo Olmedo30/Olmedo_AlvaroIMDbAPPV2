@@ -31,9 +31,8 @@ public class SearchResultsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_search_results);
         recyclerView = findViewById(R.id.recycler_view);
-        recyclerView.setLayoutManager(new GridLayoutManager(this, 2)); // 2 columnas
-        favoriteDBHelper = new FavoriteDBHelper(this); // Inicializar la base de datos
-        //Obtiene la lista de películas desde el Intent
+        recyclerView.setLayoutManager(new GridLayoutManager(this, 2));
+        favoriteDBHelper = new FavoriteDBHelper(this);
         ArrayList<Movie> receivedMovies = getIntent().getParcelableArrayListExtra("MOVIES_LIST");
         if (receivedMovies == null || receivedMovies.isEmpty()) {
             Toast.makeText(this, "No se encontraron portadas para mostrar.", Toast.LENGTH_SHORT).show();
@@ -41,7 +40,6 @@ public class SearchResultsActivity extends AppCompatActivity {
             return;
         }
         movies.addAll(receivedMovies);
-        //Configura el RecyclerView sin un adaptador
         recyclerView.setAdapter(new RecyclerView.Adapter<MovieViewHolder>() {
             @NonNull
             @Override
@@ -67,7 +65,6 @@ public class SearchResultsActivity extends AppCompatActivity {
                         .error(R.drawable.error_image)
                         .into(holder.imageView);
 
-                //Abre los detalles al hacer click
                 holder.imageView.setOnClickListener(v -> {
                     Intent intent = new Intent(SearchResultsActivity.this, MovieDetailsActivity.class);
                     intent.putExtra("MOVIE_ID", movie.getTconst());
@@ -75,7 +72,6 @@ public class SearchResultsActivity extends AppCompatActivity {
                     startActivity(intent);
                 });
 
-                //Añade la película a favoritos al hacer longClick
                 holder.imageView.setOnLongClickListener(v -> {
                     handleLongClick(movie);
                     return true;
@@ -88,23 +84,19 @@ public class SearchResultsActivity extends AppCompatActivity {
         });
     }
 
+    // Maneja el evento de hacer click largo
     private void handleLongClick(Movie movie) {
-        // Verifica que la película no sea nula
         if (movie == null) {
             Toast.makeText(this, "Película no disponible para insertar", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Obtiene UID de Firebase
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         String uid = (currentUser != null) ? currentUser.getUid() : "usuario_sin_uid";
 
-        // Verifica si ya está en favoritos
         if (favoriteDBHelper.isFavorite(uid, movie.getTconst())) {
-            // Si ya está en favoritos, mostrar un mensaje
             Toast.makeText(this, "La película ya está en favoritos", Toast.LENGTH_SHORT).show();
         } else {
-            // Inserta en la tabla 'favorites' local
             boolean isInsertedLocal = favoriteDBHelper.insertFavorite(
                     uid,
                     movie.getTconst(),
@@ -113,7 +105,6 @@ public class SearchResultsActivity extends AppCompatActivity {
             );
 
             if (isInsertedLocal) {
-                // Inserta en la nube
                 boolean isInsertedCloud = favoriteDBHelper.insertFavoriteToCloud(
                         uid,
                         movie.getTconst(),
@@ -132,6 +123,7 @@ public class SearchResultsActivity extends AppCompatActivity {
         }
     }
 
+    // Convierte dp a píxeles
     private int dpToPx(int dp) {
         return (int) TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP,

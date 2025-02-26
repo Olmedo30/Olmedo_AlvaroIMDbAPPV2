@@ -32,7 +32,6 @@ public class IMDbApiService {
 
             int responseCode = connection.getResponseCode();
             if (responseCode == 429) {
-                // Cambiar clave API y reintentar
                 IMDbApiClient.switchApiKey();
                 return makeRequest(urlString);
             }

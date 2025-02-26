@@ -4,12 +4,10 @@ import android.content.Context;
 import android.util.Log;
 import com.google.firebase.firestore.CollectionReference;
 import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import edu.pmdm.olmedo_lvaroimdbapp.models.FavoriteDBHelper;
 import edu.pmdm.olmedo_lvaroimdbapp.models.Movie;
@@ -26,13 +24,13 @@ public class FavoritesSync {
         this.userId = userId;
     }
 
+    // Sincroniza los datos de las colecciones y documentos de la nube de firebase y lo guarda en la BD local
     public void syncFavorites(Runnable onComplete) {
         CollectionReference moviesCollection = firestore.collection("favorites").document(userId).collection("movies");
         moviesCollection.get().addOnCompleteListener(taskMovies -> {
             if (taskMovies.isSuccessful()) {
                 QuerySnapshot querySnapshot = taskMovies.getResult();
                 if (querySnapshot != null && !querySnapshot.isEmpty()) {
-                    // Limpiar favoritos locales solo si hay datos en la nube
                     dbHelper.deleteAllFavorites(userId);
                     for (QueryDocumentSnapshot doc : querySnapshot) {
                         String movieId = doc.getString("movie_id");
@@ -40,9 +38,7 @@ public class FavoritesSync {
                         String title = doc.getString("title");
                         dbHelper.insertFavorite(userId, movieId, poster, title);
                     }
-                    Log.d(TAG, "Se han sincronizado los favoritos de la nube a la base de datos local.");
                 } else {
-                    // Si no hay películas en la nube, elimina todos los favoritos locales
                     dbHelper.deleteAllFavorites(userId);
                     Log.d(TAG, "No hay películas en la colección 'movies' de la nube. Se han eliminado los favoritos locales.");
                 }
@@ -55,6 +51,7 @@ public class FavoritesSync {
         });
     }
 
+    // Añade una película a la nube
     public void addMovieToCloud(Movie movie) {
         DocumentReference userDocRef = firestore.collection("favorites").document(userId);
         userDocRef.set(new HashMap<>()).addOnSuccessListener(aVoid -> {
@@ -69,6 +66,7 @@ public class FavoritesSync {
         }).addOnFailureListener(e -> Log.e(TAG, "Error al crear el documento de usuario", e));
     }
 
+    // Elimina una película de la nube
     public void removeMovieFromCloud(String movieId) {
         DocumentReference movieRef = firestore.collection("favorites")
                 .document(userId)

@@ -42,39 +42,30 @@ public class SearchMovie extends Fragment {
         yearInput = root.findViewById(R.id.year_input);
         searchButton = root.findViewById(R.id.search_button);
 
-        //Rellena el spinner con los géneros
         fetchGenres();
 
-        //Configura el botón de búsqueda
         searchButton.setOnClickListener(v -> {
-            //Obtene el género seleccionado y el año ingresado
             String selectedGenre = genreSpinner.getSelectedItem().toString();
             String genreId = genreMap.get(selectedGenre); // Obtener el ID del género
             String enteredYear = yearInput.getText().toString().trim();
-            //Verifica si el género es válido
             if (genreId == null) {
                 Toast.makeText(getContext(), "Por favor, selecciona un género válido.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            //Verifica si el año ingresado es válido
             if (enteredYear.isEmpty()) {
-                //Muestra mensaje si el campo está vacío
                 Toast.makeText(requireContext(), "El año no puede estar vacío.", Toast.LENGTH_SHORT).show();
                 return;
             }
             try {
                 int yearInt = Integer.parseInt(enteredYear);
-                //Valida si el año está fuera del rango permitido (1890 a 2026)
                 if (yearInt < 1890 || yearInt > 2026) {
                     Toast.makeText(requireContext(), "El año debe estar entre 1890 y 2026.", Toast.LENGTH_SHORT).show();
                     return;
                 }
             } catch (NumberFormatException e) {
-                //Muestra mensaje si el valor ingresado no es un número válido
                 Toast.makeText(requireContext(), "Introduce un año en formato numérico.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            //Si las validaciones son exitosas, realizar la búsqueda
             performSearch(genreId, enteredYear);
         });
 

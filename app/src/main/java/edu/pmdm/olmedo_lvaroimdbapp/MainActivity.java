@@ -50,21 +50,17 @@ public class MainActivity extends AppCompatActivity {
         NavigationUI.setupActionBarWithNavController(this, navController, mAppBarConfiguration);
         NavigationUI.setupWithNavController(binding.navView, navController);
 
-        // Configuración del Header en NavigationView
         NavigationView navigationView = binding.navView;
         Button logOutButton = navigationView.getHeaderView(0).findViewById(R.id.buttonLogOut);
 
-        // Referencias a la foto y texto del Header
         ImageView profileImageView = navigationView.getHeaderView(0).findViewById(R.id.imageView);
         TextView emailTextView = navigationView.getHeaderView(0).findViewById(R.id.textView);
         TextView nameTextView = navigationView.getHeaderView(0).findViewById(R.id.nametextView);
 
-        // Obtenemos el usuario logueado en Firebase
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user != null) {
             String userId = user.getUid();
 
-            // Verifica si el usuario inició sesión con Facebook
             boolean isFacebookUser = false;
             for (UserInfo provider : user.getProviderData()) {
                 if ("facebook.com".equals(provider.getProviderId())) {
@@ -73,14 +69,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            // Muestra "Conectado con Facebook" si el usuario se autenticó con Facebook, de lo contrario muestra el email
             if (isFacebookUser) {
                 emailTextView.setText("Conectado con Facebook");
             } else {
                 emailTextView.setText(user.getEmail());
             }
 
-            // Carga la foto de perfil
             FavoriteDBHelper dbHelper = new FavoriteDBHelper(this);
             UserSession userSession = dbHelper.getUserSession(userId);
             if (userSession != null && userSession.getImage() != null && !userSession.getImage().isEmpty()) {
@@ -103,7 +97,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // Cierra sesión al darle al botón
         logOutButton.setOnClickListener(v -> {
             FirebaseAuth.getInstance().signOut();
             GoogleSignInClient googleSignInClient = GoogleSignIn.getClient(MainActivity.this, GoogleSignInOptions.DEFAULT_SIGN_IN);
@@ -151,7 +144,6 @@ public class MainActivity extends AppCompatActivity {
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == RESULT_OK) {
-                    // Recargar el nombre desde SQLite
                     FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
                     if (user != null) {
                         loadUserNameFromDB(user.getUid());
@@ -164,7 +156,6 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.action_editUser) {
-            // Iniciar la actividad EditUser
             Intent intent = new Intent(this, EditUser.class);
             editUserLauncher.launch(intent);
             return true;
@@ -172,21 +163,17 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    // Carga el nombre de usuario desde SQLite
     private void loadUserNameFromDB(String userId) {
-        // Cargar datos desde SQLite
         FavoriteDBHelper dbHelper = new FavoriteDBHelper(this);
         UserSession userSession = dbHelper.getUserSession(userId);
 
-        // Referencia al TextView del nombre en el Header
         NavigationView navigationView = binding.navView;
         TextView nameTextView = navigationView.getHeaderView(0).findViewById(R.id.nametextView);
 
-        // Asigna el nombre al TextView
         if (userSession != null && userSession.getNombre() != null && !userSession.getNombre().isEmpty()) {
-            // Priorizar el nombre de SQLite si existe
             nameTextView.setText(userSession.getNombre());
         } else {
-            // Usar el nombre de Firebase si no hay nombre en SQLite
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
             if (user != null) {
                 nameTextView.setText(user.getDisplayName());
@@ -194,30 +181,26 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Carga la foto de perfil desde SQLite
     private void loadUserImageFromDB(String userId) {
-        // Cargar datos desde SQLite
         FavoriteDBHelper dbHelper = new FavoriteDBHelper(this);
         UserSession userSession = dbHelper.getUserSession(userId);
 
-        // Referencia al ImageView del Header
         NavigationView navigationView = binding.navView;
         ImageView profileImageView = navigationView.getHeaderView(0).findViewById(R.id.imageView);
 
-        // Asigna la imagen al ImageView
         if (userSession != null && userSession.getImage() != null && !userSession.getImage().isEmpty()) {
             if (userSession.getImage().startsWith("http")) {
                 Glide.with(this)
                         .load(userSession.getImage())
                         .into(profileImageView);
             } else {
-                // Decodificar Base64 y cargar la imagen
                 byte[] decodedBytes = Base64.decode(userSession.getImage(), Base64.DEFAULT);
                 Glide.with(this)
                         .load(decodedBytes)
                         .into(profileImageView);
             }
         } else {
-            // Si no hay imagen ni en SQLite ni en Firebase, usar una imagen predeterminada
             profileImageView.setImageResource(R.mipmap.ic_launcher_round);
         }
     }

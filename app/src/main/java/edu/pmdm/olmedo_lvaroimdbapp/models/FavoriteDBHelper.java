@@ -26,11 +26,9 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
     private static final String TAG = "FavoriteDBHelper";
     private static FavoriteDBHelper instance;
     private final FirebaseFirestore firestore;
-    // Nombre y versión de la base de datos
     private static final String DATABASE_NAME = "favorites.db";
     private static final int DATABASE_VERSION = 4; // Ajustar si necesitas cambios de esquema
 
-    // Tabla "favorites"
     private static final String TABLE_FAVORITES = "favorites";
     private static final String COLUMN_ID = "id";
     private static final String COLUMN_USER_ID = "user_id";
@@ -94,11 +92,9 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         Log.d(TAG, "Actualizando base de datos de la versión " + oldVersion + " a " + newVersion);
 
-        // Eliminar las tablas existentes
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_FAVORITES);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USER_SESSIONS);
 
-        // Crear las tablas de nuevo
         onCreate(db);
     }
 
@@ -113,12 +109,11 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
 
-        // Asegúrate de que todos los valores sean válidos antes de insertarlos
         values.put(COLUMN_SESSION_USER_ID, userId);
         values.put(COLUMN_NOMBRE, nombre != null ? nombre : "");
         values.put(COLUMN_EMAIL, email != null ? email : "");
         values.put(COLUMN_LOGIN_TIME, loginTime != null ? loginTime : "");
-        values.put(COLUMN_LOGOUT_TIME, ""); // logout_time no lo estamos pasando
+        values.put(COLUMN_LOGOUT_TIME, "");
         values.put(COLUMN_ADDRESS, address != null ? address : "");
         values.put(COLUMN_PHONE, phone != null ? phone : "");
         values.put(COLUMN_IMAGE, image != null ? image : "");
@@ -132,17 +127,15 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         );
 
         if (result == -1) {
-            // Si falla la inserción, intenta actualizar el registro existente
             int rows = db.update(
                     TABLE_USER_SESSIONS,
                     values,
                     COLUMN_SESSION_USER_ID + "=?",
                     new String[]{userId}
             );
-            return rows > 0; // Retorna true si se actualizó al menos una fila
+            return rows > 0;
         }
-
-        return true; // Retorna true si se insertó correctamente
+        return true;
     }
 
     public UserSession getUserSession(String userId) {
@@ -182,11 +175,10 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         if (cursor != null) {
             cursor.close();
         }
-        return null; // Si no encontró nada
+        return null;
     }
 
     public boolean insertFavorite(String userId, String movieId, String imageUrl, String title) {
-        // Verifica si ya es favorito
         if (isFavorite(userId, movieId)) {
             return false;
         }
@@ -220,7 +212,7 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
                 .addOnSuccessListener(aVoid -> Log.d(TAG, "Película añadida a la nube: " + movieId))
                 .addOnFailureListener(e -> Log.e(TAG, "Error al añadir la película a la nube: " + movieId, e));
 
-        return true; // Retorna true si la operación fue exitosa
+        return true;
     }
 
     public List<Movie> getAllMovies(String userId) {
@@ -267,32 +259,6 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         return exists;
     }
 
-    public boolean updateUserSession(String userId,
-                                     String nombre,
-                                     String email,
-                                     String loginTime,
-                                     String address,
-                                     String phone,
-                                     String image) {
-
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_NOMBRE, nombre);
-        values.put(COLUMN_EMAIL, email);
-        values.put(COLUMN_LOGIN_TIME, loginTime);
-        values.put(COLUMN_ADDRESS, address);
-        values.put(COLUMN_PHONE, phone);
-        values.put(COLUMN_IMAGE, image);
-
-        // Actualiza la fila que coincida con el user_id
-        int rowsAffected = db.update(TABLE_USER_SESSIONS,
-                values,
-                COLUMN_SESSION_USER_ID + "=?",
-                new String[]{userId});
-
-        return (rowsAffected > 0);  // true si se actualizó al menos 1 fila
-    }
-
     public boolean addUser(UserSession user) {
         if (user == null || user.getUserId() == null) {
             Log.e("SQLiteHelper", "No se puede agregar un usuario nulo o con ID nulo.");
@@ -313,10 +279,8 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
 
         long result = db.insertWithOnConflict(TABLE_USER_SESSIONS, null, values, SQLiteDatabase.CONFLICT_REPLACE);
         if (result == -1) {
-            Log.e("SQLiteHelper", "Error al insertar/actualizar usuario: " + user.getUserId());
             return false;
         } else {
-            Log.d("SQLiteHelper", "Usuario insertado/actualizado exitosamente: " + user.getUserId());
             return true;
         }
     }
@@ -328,7 +292,7 @@ public class FavoriteDBHelper extends SQLiteOpenHelper {
         try {
             cursor = db.query(
                     TABLE_USER_SESSIONS,
-                    null, // Todas las columnas
+                    null,
                     COLUMN_USER_ID + "=?",
                     new String[]{userId},
                     null,

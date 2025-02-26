@@ -26,9 +26,6 @@ import com.google.android.libraries.places.widget.model.AutocompleteActivityMode
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Activity para seleccionar una dirección utilizando Google Maps y la API de Autocomplete.
- */
 public class SelectAddressActivity extends AppCompatActivity implements OnMapReadyCallback {
 
     private EditText edtAddress;
@@ -44,7 +41,6 @@ public class SelectAddressActivity extends AppCompatActivity implements OnMapRea
                                 Place place = Autocomplete.getPlaceFromIntent(data);
                                 edtAddress.setText(place.getAddress());
 
-                                // Actualiza el mapa con la ubicación seleccionada
                                 LatLng selectedLocation = place.getLatLng();
                                 if (selectedLocation != null && googleMap != null) {
                                     googleMap.clear();
@@ -73,17 +69,14 @@ public class SelectAddressActivity extends AppCompatActivity implements OnMapRea
             Places.initialize(getApplicationContext(), getString(R.string.google_maps_key));
         }
 
-        // Referencias a los elementos de la interfaz
         edtAddress = findViewById(R.id.edtAddress);
         Button btnSearchLocation = findViewById(R.id.btnSearchLocation);
         Button btnConfirmLocation = findViewById(R.id.btnConfirmLocation);
         mapView = findViewById(R.id.mapView);
 
-        // Inicializar el MapView
         mapView.onCreate(savedInstanceState);
         mapView.getMapAsync(this);
 
-        // Al pulsar el botón de buscar se lanza el Autocomplete
         btnSearchLocation.setOnClickListener(v -> {
             List<Place.Field> fields = Arrays.asList(
                     Place.Field.ID,
@@ -96,7 +89,6 @@ public class SelectAddressActivity extends AppCompatActivity implements OnMapRea
             autocompleteLauncher.launch(intent);
         });
 
-        // Al confirmar, se devuelve la dirección seleccionada a la activity anterior
         btnConfirmLocation.setOnClickListener(v -> {
             String selectedAddress = edtAddress.getText().toString();
             Intent resultIntent = new Intent();
@@ -106,21 +98,17 @@ public class SelectAddressActivity extends AppCompatActivity implements OnMapRea
         });
     }
 
-    /**
-     * Método llamado cuando el mapa está listo.
-     * Se establece una ubicación predeterminada (por ejemplo, Sídney, Australia).
-     */
+    // Métodos de ciclo de vida del MapView
     @Override
     public void onMapReady(GoogleMap googleMap) {
         this.googleMap = googleMap;
-        LatLng defaultLocation = new LatLng(-33.8688, 151.2093);  // Ubicación predeterminada
+        LatLng defaultLocation = new LatLng(-33.8688, 151.2093);
         googleMap.addMarker(new MarkerOptions()
                 .position(defaultLocation)
                 .title("Ubicación predeterminada"));
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 15));
     }
 
-    // Ciclo de vida del MapView
     @Override
     protected void onResume() {
         super.onResume();
